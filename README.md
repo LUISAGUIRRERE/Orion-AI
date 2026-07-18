@@ -24,6 +24,7 @@ The repository currently contains governance and architecture documentation only
 
 - [`AGENTS.md`](AGENTS.md) — entry point describing the AI Board and how each AI role should operate in this repository.
 - [`.ai/`](.ai/) — AI Board governance: membership, roles, decision process, handoff template, and per-agent system prompts.
+- [`.orion/`](.orion/) — role-to-implementation mapping ([`TEAM.md`](.orion/TEAM.md)) and the Mission Framework ([`missions/`](.orion/missions/README.md)), the execution contract every implementation must begin from.
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — system architecture and MVP component descriptions.
 - [`docs/DECISIONS.md`](docs/DECISIONS.md) — architecture decision record (ADR) log.
 

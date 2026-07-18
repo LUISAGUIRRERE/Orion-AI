@@ -4,7 +4,7 @@
 |---|---|
 | Document type | Operational workflow (new capability) |
 | Status | Active |
-| Version | 1.0.0 |
+| Version | 1.1.0 |
 | Layered on | `.ai/DECISION_PROCESS.md`, `PROTOCOL.md`, `.orion/TEAM.md` |
 | Does not replace | `CONTRIBUTING.md`, `.ai/DECISION_PROCESS.md` |
 
@@ -67,13 +67,13 @@ flowchart LR
 **Purpose.** Decide how an approved Issue will be built before anyone builds it, when the change is cross-cutting or hard to reverse.
 **Owning role.** Architect (software structure) and/or CTO (strategic/AI design), per `.ai/ROLES.md`.
 **Artifact.** An ADR in `docs/DECISIONS.md`, following the Architecture or Governance path in `.ai/DECISION_PROCESS.md`. Purely local, reversible implementation choices skip this stage by design.
-**Exit criteria.** The ADR is Accepted (Author, Reviewed by, Approved by all present), or the Issue is judged local/reversible and proceeds straight to Implementation.
+**Exit criteria.** The ADR is Accepted (Author, Reviewed by, Approved by all present), or the Issue is judged local/reversible and proceeds straight to Implementation. Either way, when the work proceeds to Builder execution, an Approved Mission also exists in [`.orion/missions/`](.orion/missions/README.md), scoping exactly what the Builder may create or modify.
 
 ## 6. Implementation
 
 **Purpose.** Build the approved Issue or ADR.
 **Owning role.** Builder.
-**Artifact.** Code and tests on a branch, referencing the Issue and, where one exists, the ADR.
+**Artifact.** Code and tests on a branch, referencing the Issue, the Mission ([`.orion/missions/`](.orion/missions/README.md)), and, where one exists, the ADR.
 **Exit criteria.** The implementation is functionally complete against the Issue's acceptance criteria and ready for review.
 
 ## 7. Testing
@@ -151,3 +151,4 @@ This mirrors the governance-path classification already implicit in `.ai/DECISIO
 | Version | Date | Change | Approved by |
 |---|---|---|---|
 | 1.0.0 | 2026-07-17 | Initial workflow, layered on existing governance paths and artifacts | Luis Aguirre |
+| 1.1.0 | 2026-07-17 | Stages 5 and 6 now require an Approved Mission before Builder execution. Part of MISSION-0001 (ADR-0005). | Luis Aguirre |

@@ -4,7 +4,7 @@
 |---|---|
 | Document type | Constitution (conceptual / philosophical) |
 | Status | Active |
-| Version | 2.0.0 |
+| Version | 2.1.0 |
 | Approved by | Luis Aguirre |
 
 ## Purpose of this document
@@ -34,6 +34,8 @@ The single concept this Constitution protects above all others: **a role is a fu
 The concrete answer to "who currently plays this role" is deliberately kept out of this Constitution and lives in `.orion/TEAM.md`, precisely so that it can change often and cheaply while the principles here change rarely, if ever.
 
 This separation exists for one reason: the coordination system must outlive any individual agent. If a role definition were written in terms of a specific vendor, the system would need to be rewritten every time that vendor's product changed or was replaced. Written in terms of function and authority, it does not.
+
+This principle extends to execution itself: no implementation may begin without an explicit, bounded contract — a Mission — naming exactly what may change, what may not, and what "done" means. Ambiguity at the boundary between decision and execution is where vendor-specific assumptions and scope creep both originate; a Mission exists to close that boundary before any agent, of any kind, touches a file. The Mission Framework itself is defined in [`.orion/missions/`](.orion/missions/README.md).
 
 ## 3. Architectural Philosophy
 
@@ -68,3 +70,4 @@ This Constitution exists so that the second kind of change never forces the firs
 |---|---|---|---|
 | 1.0.0 | 2026-07-17 | Initial charter (superseded — duplicated governance already defined in `.ai/`, `README.md`, and `docs/ARCHITECTURE.md`) | — |
 | 2.0.0 | 2026-07-17 | Redefined as the Constitution of ORION OS: conceptual/philosophical layer only. Governance, roles, decision process, Definition of Done, and Quality Standards moved to or kept in `.ai/`; role-to-implementation mapping moved to `.orion/TEAM.md`. | Luis Aguirre |
+| 2.1.0 | 2026-07-17 | Added one principle under Vendor-Independent Concepts: implementation requires a bounded Mission contract. Part of MISSION-0001 (ADR-0005). | Luis Aguirre |

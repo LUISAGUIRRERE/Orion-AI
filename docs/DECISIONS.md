@@ -129,6 +129,46 @@ A parallel, vendor-specific set of governance documents already existed under `.
 - `.orion/TEAM.md` currently records two role reassignments and one new implementation (Codex as Builder, Jules reassigned to GitOps) relative to `.ai/ROLES.md`'s current text, and leaves Research and Documentation unassigned. Reconciling `.ai/ROLES.md`/`.ai/BOARD.md` with this mapping — or accepting the two as deliberately distinct — is an open governance item.
 - Formal Nemotron review of this ADR has not yet occurred and should be obtained to close the Architecture/Governance path per `.ai/DECISION_PROCESS.md`.
 
+## ADR-0005: Establish the ORION OS Mission Framework
+
+**Status:**
+Accepted
+
+**Author:**
+Claude (Chief Software Architect)
+
+**Reviewed by:**
+Nemotron
+
+**Approved by:**
+Luis Aguirre
+
+**Date:**
+2026-07-17
+
+**Supersedes:**
+None (extends ADR-0004)
+
+**Context:**
+ADR-0004 established a vendor-independent governance layer (`ORION.md`, `PROTOCOL.md`, `WORKFLOW.md`, `.orion/TEAM.md`) above the existing `.ai/` AI Board governance. During Sprint 0 validation of that model, Codex correctly refused to implement work because no authoritative execution contract existed to bound what a Builder may touch; Nemotron reviewed the resulting Mission Framework architecture proposal and approved it with recommendations; Jules validated that Git mechanics (branch, commit, push, PR) can be exercised independently of implementation. The missing artifact identified by all participants was a formal Mission Framework — recorded as an architecture proposal and then authorized as MISSION-0001.
+
+**Decision:**
+Introduce the Mission as a new artifact type: the execution contract between Product Owner, Chief Architect, Builder, Reviewer, and GitOps for one bounded unit of implementation work. No Builder work begins without an Approved Mission. The framework is implemented as `.orion/missions/README.md` (framework definition, lifecycle, Mission Log) and `.orion/missions/MISSION_TEMPLATE.md` (reusable per-mission template), and is layered on existing governance without redesigning it:
+
+- `.ai/DECISION_PROCESS.md`'s Implementation path gains one required step, "Mission approved," between "Issue approved" and Builder execution.
+- `ORION.md` gains one principle under Vendor-Independent Concepts: implementation never begins without a bounded execution contract.
+- `PROTOCOL.md` gains "Mission" as an artifact type, with its lifecycle declared as a justified specialization of the generic approval flow in §6.
+- `WORKFLOW.md` Stage 5 (Architecture) exit criteria and Stage 6 (Implementation) artifact both gain the Approved Mission requirement.
+- `.github/PULL_REQUEST_TEMPLATE.md` gains a checklist line requiring the Mission ID and GitOps Checklist confirmation.
+- Mission Ownership, Review Owner, and Merge Owner fields name abstract roles, resolved to concrete agents through `.orion/TEAM.md`; individual Missions may record the resolved names for traceability without the framework itself hardcoding them.
+
+This ADR was executed under MISSION-0001, the first Mission issued under this framework, applied to its own implementation — delivered as a Pull Request rather than a direct merge to `main`, establishing the review-then-merge mechanic the framework itself now requires going forward.
+
+**Consequences:**
+- Every future implementation Issue requires an Approved Mission before Builder work starts.
+- `.orion/TEAM.md`'s current disagreement with `.ai/ROLES.md` (Codex recorded as Builder, Jules recorded as GitOps — neither reflected in `.ai/ROLES.md`'s seat descriptions) becomes operationally load-bearing, since Mission Ownership resolves through `TEAM.md`. This remains an open item for Luis to resolve.
+- Pull Requests going forward are expected to reference a Mission ID; PRs without one should be treated as Minor Documentation only, per `.ai/DECISION_PROCESS.md`.
+
 ## ADR Template
 
 Use this template for every new ADR:
