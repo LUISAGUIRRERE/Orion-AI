@@ -1,156 +1,64 @@
-# ORION.md — ORION OS Charter
+# ORION.md — The Constitution of ORION OS
 
 | Field | Value |
 |---|---|
-| Document type | Charter |
+| Document type | Constitution (conceptual / philosophical) |
 | Status | Active |
-| Version | 1.0.0 |
-| Owner | Board (Product Owner + Architect) |
-| Applies to | All agents, human or AI, operating under ORION OS |
+| Version | 2.0.0 |
+| Approved by | Luis Aguirre |
 
 ## Purpose of this document
 
-ORION OS is an operating system for software delivery, not a piece of software itself. It does not compile, run, or ship. It coordinates independent software engineering agents — human or artificial — around a shared vision, a shared set of rules, and a shared repository, so that work produced by different agents at different times is coherent, auditable, and safe to merge.
+ORION OS coordinates independent software engineering agents — human or artificial — around a shared mission, a shared repository, and a shared set of rules. This document is its Constitution: it describes the *kind* of system ORION OS is and the principles it must never violate, regardless of which concrete agents implement it today or in the future.
 
-This document is the constitution of that system. `ROLES.md`, `PROTOCOL.md`, and `WORKFLOW.md` derive their authority from it. Where any other document conflicts with this one, this document prevails until formally amended.
+This document does **not** duplicate operational governance. It does not define who is on the Board, what each seat may or may not do, or how a change moves from idea to merge — that is defined, authoritatively, in `AGENTS.md` and `.ai/` (`BOARD.md`, `ROLES.md`, `DECISION_PROCESS.md`, `HANDOFF_TEMPLATE.md`). It does not restate the product mission or architecture — that lives in `README.md` and `docs/ARCHITECTURE.md`. It does not define the current mapping of abstract roles to concrete agents — that lives in `.orion/TEAM.md`. It does not define how agents exchange work — that lives in `PROTOCOL.md` and `WORKFLOW.md`.
 
----
+What this document defines is the layer above all of that: the principles those documents must be consistent with, and the philosophy that justifies why they are shaped the way they are.
 
-## 1. Vision
+## 1. Operating Principles of the AI Coordination System
 
-A software organization where any number of independent engineering agents — regardless of who or what built them — can contribute to the same product, at the same time, without a human having to mediate every handoff, because the rules of collaboration are written down, machine-readable, and enforced by process rather than by personality.
+1. **Documents over conversation.** Coordination happens through artifacts committed to the repository, not through ephemeral exchanges. A decision that exists only in a conversation does not exist.
+2. **Segregation of duties.** The agent that produces a piece of work is never the agent that approves it. This is structural, not a matter of trust.
+3. **Reversibility.** Every change that reaches the trunk must be revertible without special knowledge. If it cannot be reverted safely, it should not have been merged.
+4. **Traceability.** Every artifact links back to the request, decision, or issue that justifies its existence. No orphan work.
+5. **Memory as a first-class citizen.** Knowledge produced during delivery — decisions, research, retrospectives — is captured as durable documentation, not left inside a session that will eventually be discarded.
+6. **Quality is continuous, not a phase.** Quality gates apply throughout the lifecycle, not only at the end of it.
+7. **Human accountability.** A human is always the final point of accountability for what ships, independent of how much of the work was produced autonomously.
 
-## 2. Mission
+## 2. Vendor-Independent Concepts
 
-ORION OS exists to:
+The single concept this Constitution protects above all others: **a role is a function, not an identity.**
 
-1. Define unambiguous roles, authority, and accountability for every participant in the software lifecycle.
-2. Replace ad-hoc conversation between agents with structured, versioned, reviewable documents.
-3. Guarantee that every unit of work — idea, design, code, or decision — can be traced from origin to release.
-4. Keep the system independent of any specific AI vendor, model, or tool, so that the coordination layer outlives any individual agent.
-5. Make quality, safety, and reversibility non-negotiable defaults rather than optional practices.
+"Architect," "Builder," "Reviewer," "GitOps," and every other function ORION OS needs are defined by what they are responsible for and what authority they carry — never by which model, product, or vendor currently performs them. An implementation can be replaced entirely — a new model, a new tool, a system that does not exist yet — without requiring any change to this document, because this document never names one.
 
-## 3. Principles
+The concrete answer to "who currently plays this role" is deliberately kept out of this Constitution and lives in `.orion/TEAM.md`, precisely so that it can change often and cheaply while the principles here change rarely, if ever.
 
-1. **Documents over conversation.** Agents communicate through artifacts with defined schemas, not free-form chat. A decision that only exists in a conversation does not exist.
-2. **Vendor neutrality.** No document, role, or process may name or depend on a specific AI provider or model. Any agent capable of fulfilling a role's responsibilities may be assigned that role.
-3. **Explicit authority.** Every role has a bounded, written scope of what it may decide alone, what it may propose, and what it may never do. Silence is not authority.
-4. **Segregation of duties.** The agent that builds a change is never the agent that approves it. Authorship and approval are always separated.
-5. **Small, verifiable increments.** Work is decomposed until each unit can be independently reviewed, tested, and reverted.
-6. **Traceability by default.** Every artifact links to the request, decision, or issue that justifies its existence. No orphan work.
-7. **Reversibility.** Every change that reaches `main` must be revertible without special knowledge. If it cannot be reverted safely, it cannot be merged.
-8. **Memory is a first-class citizen.** Knowledge produced during the lifecycle (decisions, retrospectives, research) is captured as durable, searchable documentation — not left in transient sessions.
-9. **Quality is not a phase.** Quality gates apply continuously (design, build, review, release), not only at the end.
-10. **Human accountability.** A human (the Board) is always the final point of accountability for what ships, regardless of how much of the work was produced autonomously.
+This separation exists for one reason: the coordination system must outlive any individual agent. If a role definition were written in terms of a specific vendor, the system would need to be rewritten every time that vendor's product changed or was replaced. Written in terms of function and authority, it does not.
 
-## 4. Governance
+## 3. Architectural Philosophy
 
-ORION OS is governed by a **Board**, composed at minimum of one human Product Owner and one Architect (human or delegated). The Board:
+- **Evolutionary, not big-upfront.** Architecture is expected to change; structural decisions are recorded so change is deliberate, not accidental.
+- **Boundaries before implementation.** Structural boundaries are decided before building starts; changing them later is itself an architectural decision, not an implementation detail.
+- **Technology neutrality.** Architectural reasoning describes capabilities and contracts, not vendor products, except where a specific technology is itself the documented decision.
+- **Fit for purpose over fashion.** Complexity must be justified by a requirement, not by precedent, trend, or what a particular tool makes convenient.
+- **Single source of truth.** The system's real, current architecture is described in exactly one living document (`docs/ARCHITECTURE.md`). Design discussion that preceded a change is historical once merged; the living document is authoritative.
 
-- Owns this document and all root-level governance documents (`ORION.md`, `ROLES.md`, `PROTOCOL.md`, `WORKFLOW.md`).
-- Approves amendments to governance documents (see §5).
-- Resolves escalations that roles cannot resolve between themselves (see `PROTOCOL.md`).
-- Is accountable for every release, independent of which agents produced the underlying work.
+## 4. Collaboration Philosophy
 
-Governance artifacts (board composition, standing decisions, meeting or session records) live under `.ai/BOARD.md`. Operational role assignments for a given engagement live under `.ai/ROLES.md` and must remain consistent with the definitions in this repository's `ROLES.md`; the former assigns agents to roles, the latter defines what the roles mean.
+Multiple agents working on the same system at the same time only stay coherent if collaboration is structured, not improvised.
 
-Governance is deliberately lightweight: it exists to make disagreements resolvable, not to slow down routine work. Routine work never requires Board involvement; only exceptions, conflicts, and amendments do.
+- Work is handed off through explicit artifacts (issues, pull requests, architecture decision records, handoff records), never assumed to be understood implicitly.
+- Disagreement between roles is expected and is resolved through escalation to a human authority, not through the more persistent or more persuasive agent prevailing.
+- No agent is trusted by default to have full context; every artifact is written so that an agent encountering it cold — with no memory of how it came to exist — can act on it correctly.
+- Collaboration protocols (see `PROTOCOL.md`) are designed around the roles defined by this Constitution, not around the specific agents in `.orion/TEAM.md` at any given time.
 
-## 5. Decision Process
+## 5. Mission Philosophy
 
-Decisions are classified by blast radius:
+ORION OS treats "what the system is trying to accomplish" and "which agents are accomplishing it" as two separate questions with two separate lifecycles.
 
-| Class | Examples | Who decides | Record required |
-|---|---|---|---|
-| **Reversible / local** | Naming, file layout inside a module, code style within existing standards | Builder or Architect, alone | Optional inline comment |
-| **Reversible / cross-cutting** | New dependency, module boundary, API contract | Architect, with Reviewer sign-off | Architecture Decision Record (ADR) in `docs/DECISIONS.md` |
-| **Hard to reverse** | Data model migrations, public interfaces, removing a capability | Architect proposes, Board ratifies | ADR + Board ratification entry |
-| **Governance** | Changes to `ORION.md`, `ROLES.md`, `PROTOCOL.md`, `WORKFLOW.md` | Board only | Amendment entry in this document's changelog and in `.ai/BOARD.md` |
+The mission — what ORION exists to do for the business it serves — is defined in `README.md` and `docs/ARCHITECTURE.md`, and changes only when a deliberate product decision changes it. The roster of agents carrying out that mission changes far more often, for reasons that have nothing to do with the mission itself: a better model becomes available, a tool is deprecated, a new capability emerges.
 
-Standard flow for any decision above the "local" class:
-
-1. **Proposal** — the initiating role writes a short problem statement and at least one alternative considered.
-2. **Review** — affected roles comment against the proposal document (see `PROTOCOL.md` for the review mechanics).
-3. **Decision record** — the outcome, rationale, and rejected alternatives are written down, even if the decision was obvious.
-4. **Ratification** — decisions above "reversible / cross-cutting" require explicit Board sign-off before implementation starts.
-
-Undocumented decisions are treated as if they were never made and may be reopened at any time without penalty to whoever reopens them.
-
-## 6. Definition of Done
-
-A unit of work is Done only when **all** of the following hold:
-
-- [ ] It traces to a documented request (idea, roadmap item, or defect).
-- [ ] It was implemented against an approved design where one is required (see `WORKFLOW.md` §Architecture).
-- [ ] It has automated tests proportional to its risk, and they pass.
-- [ ] It was reviewed by a Reviewer who did not author it, and the review is recorded.
-- [ ] It meets the Quality Standards in §7.
-- [ ] Documentation affected by the change (user-facing or internal) was updated in the same change set.
-- [ ] It was merged through the Pull Request flow defined in `WORKFLOW.md`, with GitOps confirming the merge is clean and revertible.
-- [ ] Any decisions made along the way are captured per §5.
-- [ ] Knowledge worth keeping (why, not just what) was captured per `WORKFLOW.md` §Knowledge Capture.
-
-A sprint, roadmap item, or release is Done only when every unit of work it contains is Done, and the Retrospective for it has been held (see `WORKFLOW.md`).
-
-## 7. Quality Standards
-
-- **Correctness.** Behavior matches the approved design; deviations are documented, not silent.
-- **Testability.** Nothing is considered complete without a test strategy; untestable designs are rejected at Architecture review.
-- **Security.** No secret, credential, or token is ever committed. Inputs are treated as untrusted by default. Security-relevant changes require explicit Reviewer sign-off.
-- **Readability.** Code and documents are written for the next agent to read them cold, without access to the conversation that produced them.
-- **Consistency.** New work follows the conventions already established in the repository unless a documented decision changes them.
-- **Minimalism.** The smallest change that correctly solves the problem is preferred over the most general one.
-- **Observability.** Anything that can fail in production must be detectable without reading source code.
-
-Quality is verified, not assumed: every gate in `WORKFLOW.md` exists to check one or more of the standards above.
-
-## 8. Repository Structure
-
-```
-/
-├── ORION.md              # This document — the charter
-├── ROLES.md              # Role definitions and authority
-├── PROTOCOL.md           # Inter-agent communication protocol
-├── WORKFLOW.md           # End-to-end lifecycle
-├── .ai/
-│   ├── BOARD.md          # Board composition and standing governance decisions
-│   ├── DECISION_PROCESS.md   # Operational checklist derived from ORION.md §5
-│   ├── HANDOFF_TEMPLATE.md   # Template for the Handoff Record (see PROTOCOL.md)
-│   ├── ROLES.md          # Assignment of concrete agents to roles for this engagement
-│   └── prompts/          # Agent-specific operating instructions (vendor-scoped, not part of governance)
-├── docs/
-│   ├── ARCHITECTURE.md   # Current-state architecture, kept living
-│   ├── DECISIONS.md      # Log of Architecture Decision Records (ADRs)
-│   └── retrospectives/   # One file per retrospective (see WORKFLOW.md)
-├── roadmap/
-│   └── ROADMAP.md        # Prioritized backlog of roadmap items
-└── src/ ...              # Application code, owned by Builder/Reviewer, out of scope for this charter
-```
-
-This structure is normative for governance and knowledge artifacts (`.ai/`, `docs/`, `roadmap/`, root-level `*.md`). Application source layout under `src/` is an Architecture decision, not a governance one, and is documented in `docs/ARCHITECTURE.md`.
-
-## 9. Sprint Philosophy
-
-- Sprints are time-boxed containers for a coherent slice of the roadmap, not a unit of estimation ritual.
-- Every sprint starts with a written Sprint Plan (scope, exit criteria, roles assigned) and ends with a Sprint Review and a Retrospective (`WORKFLOW.md`).
-- Scope is fixed at sprint start; new requests during the sprint go to the next sprint unless the Product Owner explicitly re-scopes it, which requires a written note.
-- A sprint may contain work from multiple roles in parallel, coordinated exclusively through the documents defined in `PROTOCOL.md` — never through ad-hoc synchronization.
-- Sprint length is a Product Owner decision and may vary by roadmap item; ORION OS does not mandate a fixed cadence, only that the cadence be written down and stable within a sprint.
-
-## 10. Architecture Philosophy
-
-- **Evolutionary, not big-upfront.** Architecture is expected to change; every structural decision is recorded as an ADR so change is deliberate, not accidental.
-- **Boundaries before implementation.** Module and service boundaries are decided before Builders start, and changes to those boundaries go through the Decision Process in §5.
-- **Technology neutrality.** Architecture documents describe capabilities and contracts, not vendor products, except where a specific technology is itself the documented decision.
-- **Fit for purpose over fashion.** Complexity must be justified by a requirement, not by precedent or trend.
-- **Single source of truth.** `docs/ARCHITECTURE.md` always reflects the current, real state of the system. Design documents that preceded a change are historical once merged; the living document is authoritative.
-
-## 11. Documentation Philosophy
-
-- **Docs as code.** Documentation lives in the repository, is versioned with the code it describes, and goes through the same review gate.
-- **Living over historical.** `ORION.md`, `ROLES.md`, `PROTOCOL.md`, `WORKFLOW.md`, and `docs/ARCHITECTURE.md` describe the current state and are kept current on every relevant change. Historical record (why something changed) lives in `docs/DECISIONS.md` and `docs/retrospectives/`, never mixed into the living documents.
-- **Written for a cold reader.** Any agent — including one that has never seen this repository before — must be able to onboard from these documents alone.
-- **No tribal knowledge.** If it is not written down, it is not part of the system, no matter how many agents "know" it.
+This Constitution exists so that the second kind of change never forces the first. An agent turnover is an operational event, recorded in `.orion/TEAM.md`. A mission change is a product event, recorded as an ADR in `docs/DECISIONS.md`. Conflating the two — letting a change of implementation quietly become a change of mission, or vice versa — is the failure mode this document is written to prevent.
 
 ---
 
@@ -158,4 +66,5 @@ This structure is normative for governance and knowledge artifacts (`.ai/`, `doc
 
 | Version | Date | Change | Approved by |
 |---|---|---|---|
-| 1.0.0 | 2026-07-17 | Initial charter | Board |
+| 1.0.0 | 2026-07-17 | Initial charter (superseded — duplicated governance already defined in `.ai/`, `README.md`, and `docs/ARCHITECTURE.md`) | — |
+| 2.0.0 | 2026-07-17 | Redefined as the Constitution of ORION OS: conceptual/philosophical layer only. Governance, roles, decision process, Definition of Done, and Quality Standards moved to or kept in `.ai/`; role-to-implementation mapping moved to `.orion/TEAM.md`. | Luis Aguirre |

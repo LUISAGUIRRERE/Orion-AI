@@ -93,6 +93,42 @@ The first software component to be built will be the **Executive Orchestrator**,
 **Consequences:**
 Implementation work should not begin on any of these components until each has an approved GitHub Issue scoping it. This ADR authorizes description and design work, not code.
 
+## ADR-0004: Introduce ORION OS Constitution, Team Mapping, and Multi-Agent Protocol Layer
+
+**Status:**
+Accepted
+
+**Author:**
+Claude
+
+**Reviewed by:**
+Not yet performed by Nemotron — approved directly by Luis Aguirre in a live governance session. Formal Nemotron review is an open item.
+
+**Approved by:**
+Luis Aguirre
+
+**Date:**
+2026-07-17
+
+**Supersedes:**
+None (extends ADR-0001 and ADR-0002; does not replace them)
+
+**Context:**
+A parallel, vendor-specific set of governance documents already existed under `.ai/` (Board, Roles, Decision Process) when a request was made to design a vendor-agnostic operating system for coordinating AI software engineers, producing `ORION.md`, `ROLES.md`, `PROTOCOL.md`, and `WORKFLOW.md`. An initial draft duplicated existing governance with an incompatible, abstract role taxonomy, risking two competing sources of truth. Luis directed that the existing `.ai/` governance remain authoritative, that no document be replaced without justification, and that new capabilities be layered on top instead.
+
+**Decision:**
+- `.ai/BOARD.md`, `.ai/ROLES.md`, `.ai/DECISION_PROCESS.md`, `.ai/HANDOFF_TEMPLATE.md`, `AGENTS.md`, `README.md`, and `docs/ARCHITECTURE.md` remain the authoritative operational governance and product definition. Unchanged in substance.
+- `ROLES.md` at the repository root was removed; it duplicated `.ai/ROLES.md` with an incompatible taxonomy.
+- `ORION.md` was redefined from a repository charter into the Constitution of ORION OS: a conceptual/philosophical document covering operating principles, vendor-independent concepts, architectural philosophy, collaboration philosophy, and mission philosophy. It defers all operational governance to `.ai/`.
+- Definition of Done and Quality Standards, originally drafted inside the charter version of `ORION.md`, were moved into `.ai/DECISION_PROCESS.md`, evolving it rather than creating a competing checklist.
+- A new file, `.orion/TEAM.md`, was created to map abstract, vendor-independent roles (Product Owner, CTO, Architect, Builder, Reviewer, GitOps, Research, Documentation) to their current concrete implementations, so that implementation turnover never requires changing `ORION.md`.
+- `PROTOCOL.md` and `WORKFLOW.md` were created as new capabilities — a multi-agent communication protocol and an end-to-end lifecycle — layered on top of the three governance paths already defined in `.ai/DECISION_PROCESS.md`, using only artifacts that already exist in this repository (GitHub Issues, Pull Requests, ADRs, Handoff Records). No new document types or approval states were introduced.
+
+**Consequences:**
+- The repository now has a single coherent governance model with two layers: `.ai/` (who, concretely, and the exact approval mechanics) and `ORION.md`/`PROTOCOL.md`/`WORKFLOW.md`/`.orion/TEAM.md` (the vendor-independent principles and lifecycle those mechanics operate within).
+- `.orion/TEAM.md` currently records two role reassignments and one new implementation (Codex as Builder, Jules reassigned to GitOps) relative to `.ai/ROLES.md`'s current text, and leaves Research and Documentation unassigned. Reconciling `.ai/ROLES.md`/`.ai/BOARD.md` with this mapping — or accepting the two as deliberately distinct — is an open governance item.
+- Formal Nemotron review of this ADR has not yet occurred and should be obtained to close the Architecture/Governance path per `.ai/DECISION_PROCESS.md`.
+
 ## ADR Template
 
 Use this template for every new ADR:
