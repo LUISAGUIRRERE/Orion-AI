@@ -1,0 +1,41 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors / IDEs
+.vscode/
+.idea/
+*.swp
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+logs/
+
+# General build artifacts
+dist/
+build/
+*.tmp
+
+# Add language-specific patterns when an implementation language is formally approved.
+# Python is kept below because Python 3.12 is the current architectural direction
+# (see docs/DECISIONS.md). No other language's patterns are assumed yet.
+
+# Python (for a future Python 3.12 component)
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.venv/
+venv/
+env/
+.python-version
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
