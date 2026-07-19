@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block content %}
+<a href="/" class="back-link">&larr; Volver al Dashboard</a>
+
+<section id="project">
+    <div class="card-header">
+        <h1>{{ unit.name }}</h1>
+        <span class="status-dot status-{{ unit.health }}" title="Salud: {{ unit.health }}"></span>
+    </div>
+
+    <div class="card-row"><span class="label">Estado</span><span>{{ unit.status }}</span></div>
+    <div class="card-row"><span class="label">Salud</span><span class="health-{{ unit.health }}">{{ unit.health }}</span></div>
+    <div class="card-row"><span class="label">Objetivo</span><span>{{ unit.objective or "—" }}</span></div>
+
+    <h2>Misiones activas</h2>
+    <ul>
+        {% for mission in unit.missions %}
+        <li>{{ mission }}</li>
+        {% else %}
+        <li>Sin misiones activas.</li>
+        {% endfor %}
+    </ul>
+
+    <h2>Decisiones pendientes</h2>
+    <ul>
+        {% for decision in unit.decisions %}
+        <li>{{ decision }}</li>
+        {% else %}
+        <li>Sin decisiones pendientes.</li>
+        {% endfor %}
+    </ul>
+
+    <h2>Oportunidades</h2>
+    <ul>
+        {% for opportunity in unit.opportunities %}
+        <li>{{ opportunity }}</li>
+        {% else %}
+        <li>Sin oportunidades registradas.</li>
+        {% endfor %}
+    </ul>
+</section>
+{% endblock %}

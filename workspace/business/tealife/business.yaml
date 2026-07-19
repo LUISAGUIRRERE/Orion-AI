@@ -1,0 +1,14 @@
+name: TEALIFE
+status: active
+health: green
+objective: Lanzar nueva línea de producto.
+missions:
+- Finalizar empaque
+- Validar proveedor de materia prima
+business:
+  stage: launch
+  revenue_status: creciendo
+events: []
+decisions: []
+opportunities:
+- Entrar a mercado internacional
