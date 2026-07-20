@@ -157,6 +157,22 @@ def add_message(mission_id: str, payload: MessageCreate) -> Message | None:
     return message
 
 
+def assign_owner(mission_id: str, owner: str, author: str = "ORION") -> Mission | None:
+    """Assign a mission to an owner (e.g. a specific Builder) without
+    changing its status or executing anything.
+
+    Used by coordinating roles, like the COO, that decide who should
+    work on a mission without doing the work themselves.
+    """
+    mission = get_mission(mission_id)
+    if mission is None:
+        return None
+    mission.owner = owner
+    mission.updated_at = _now_iso()
+    storage.write_mission(mission_id, mission.model_dump(mode="json"))
+    return mission
+
+
 def get_messages(mission_id: str) -> list[Message]:
     """List every message for a mission, in chronological order."""
     return [Message(**m) for m in storage.read_messages(mission_id)]

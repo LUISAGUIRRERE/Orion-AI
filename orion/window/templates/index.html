@@ -6,6 +6,22 @@
     <p class="subtitle">Estado general de ORION al {{ current_date }}, {{ current_time }}.</p>
 </section>
 
+<section id="executive-summary">
+    <h2>Executive Summary</h2>
+    <div class="card-grid">
+        <div class="card">
+            <div class="card-row"><span class="label">Total Missions</span><span id="exec-total-missions">{{ coo_metrics.missions_total }}</span></div>
+            <div class="card-row"><span class="label">Ready</span><span id="exec-ready">{{ coo_metrics.missions_ready }}</span></div>
+            <div class="card-row"><span class="label">Running</span><span id="exec-running">{{ coo_metrics.missions_running }}</span></div>
+            <div class="card-row"><span class="label">Review</span><span id="exec-review">{{ coo_metrics.missions_review }}</span></div>
+            <div class="card-row"><span class="label">Done Today</span><span id="exec-done-today">{{ coo_metrics.missions_done_today }}</span></div>
+            <div class="card-row"><span class="label">Failed Today</span><span id="exec-failed-today">{{ coo_metrics.missions_failed_today }}</span></div>
+            <div class="card-row"><span class="label">Average Completion Time</span><span id="exec-avg-completion">{{ coo_metrics.average_execution_seconds }}</span></div>
+            <div class="card-row"><span class="label">Queue Size</span><span id="exec-queue-size">{{ coo_metrics.queue_size }}</span></div>
+        </div>
+    </div>
+</section>
+
 <section id="business-units">
     <h2>Business Units</h2>
     <div class="card-grid">
@@ -50,6 +66,21 @@
             <div class="card-row"><span class="label">Failed Today</span><span id="builder-failed-today">{{ builder_state.failed_today }}</span></div>
             <div class="card-row"><span class="label">Current Handler</span><span id="builder-current-handler">{{ builder_state.current_handler or "—" }}</span></div>
             <div class="card-row"><span class="label">Last Activity</span><span id="builder-last-activity">{{ builder_state.last_activity or "—" }}</span></div>
+        </div>
+    </div>
+</section>
+
+<section id="coo">
+    <h2>COO</h2>
+    <div class="card-grid">
+        <div class="card">
+            <div class="card-row"><span class="label">Status</span><span id="coo-status">{{ coo_state.status }}</span></div>
+            <div class="card-row"><span class="label">Builders Available</span><span id="coo-builders-available">{{ coo_metrics.builders_available }}</span></div>
+            <div class="card-row"><span class="label">Builders Busy</span><span id="coo-builders-busy">{{ coo_metrics.builders_busy }}</span></div>
+            <div class="card-row"><span class="label">Pending Missions</span><span id="coo-pending-missions">{{ coo_metrics.queue_size }}</span></div>
+            <div class="card-row"><span class="label">Assignments Today</span><span id="coo-assignments-today">{{ coo_state.assignments_today }}</span></div>
+            <div class="card-row"><span class="label">Average Mission Time</span><span id="coo-average-mission-time">{{ coo_metrics.average_execution_seconds }}</span></div>
+            <div class="card-row"><span class="label">Last Assignment</span><span id="coo-last-assignment">{{ coo_state.last_assignment or "—" }}</span></div>
         </div>
     </div>
 </section>

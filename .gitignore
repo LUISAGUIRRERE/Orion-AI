@@ -45,3 +45,6 @@ workspace/events.db
 
 # Builder Agent — runtime status file (regenerated automatically)
 workspace/builder_state.yaml
+
+# COO Agent — runtime status file (regenerated automatically)
+workspace/coo_state.yaml

@@ -5,6 +5,8 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 
 from orion.agents.builder import agent as builder_agent
+from orion.agents.coo import agent as coo_agent
+from orion.agents.coo import metrics as coo_metrics
 from orion.bridge import services
 from orion.bridge.models import (
     Event,
@@ -93,6 +95,47 @@ async def get_builder_status_endpoint() -> dict[str, str | int | None]:
         "failed_today": state.failed_today,
         "last_activity": state.last_activity,
     }
+
+
+@router.get("/coo/status")
+async def get_coo_status_endpoint() -> dict[str, str | int | None]:
+    """Return the COO Agent's current operational status."""
+    state = coo_agent.get_state()
+    return {
+        "status": state.status,
+        "assignments_today": state.assignments_today,
+        "last_assignment": state.last_assignment,
+        "last_scan": state.last_scan,
+    }
+
+
+@router.get("/coo/metrics")
+async def get_coo_metrics_endpoint() -> dict[str, object]:
+    """Return every COO metric, recalculated from current data."""
+    return coo_metrics.compute()
+
+
+@router.get("/coo/assignments")
+async def get_coo_assignments_endpoint() -> list[dict[str, str | None]]:
+    """Return every assignment the COO has made, derived from the
+    Mission Framework's own event log (coo_assignment_created events) —
+    no separate assignments store.
+    """
+    assignments: list[dict[str, str | None]] = []
+    for mission in services.list_missions():
+        for event in services.get_events(mission.id):
+            if event.type == "coo_assignment_created":
+                assignments.append(
+                    {
+                        "mission_id": mission.id,
+                        "title": mission.title,
+                        "owner": mission.owner,
+                        "timestamp": event.timestamp,
+                        "message": event.message,
+                    }
+                )
+    assignments.sort(key=lambda a: a["timestamp"] or "")
+    return assignments
 
 
 @router.get("/queue", response_model=list[str])
