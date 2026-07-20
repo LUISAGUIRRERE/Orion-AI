@@ -48,8 +48,13 @@ def _next_mission_id() -> str:
     return f"MISSION-{max_n + 1:04d}"
 
 
-def _record_event(mission_id: str, event_type: str, message: str, author: str) -> Event:
-    """Append a timeline event for a mission and return it."""
+def record_event(mission_id: str, event_type: str, message: str, author: str) -> Event:
+    """Append a timeline event for a mission and return it.
+
+    Public on purpose: any role (not just this module's own mission
+    lifecycle functions) may need to record a custom event type, e.g.
+    the Builder Agent's builder_assigned / builder_progress events.
+    """
     events = storage.read_events(mission_id)
     event = Event(
         id=len(events) + 1,
@@ -74,6 +79,7 @@ def create_mission(payload: MissionCreate, author: str = "ORION") -> Mission:
         business_unit=payload.business_unit,
         assigned_role=payload.assigned_role,
         priority=payload.priority,
+        mission_type=payload.mission_type,
         status=MissionStatus.NEW,
         created_at=now,
         updated_at=now,
@@ -81,9 +87,9 @@ def create_mission(payload: MissionCreate, author: str = "ORION") -> Mission:
         tags=payload.tags,
     )
     storage.write_mission(mission_id, mission.model_dump(mode="json"))
-    _record_event(mission_id, "created", f"Mission '{mission.title}' creada.", author)
+    record_event(mission_id, "created", f"Mission '{mission.title}' creada.", author)
     if payload.owner or payload.assigned_role:
-        _record_event(
+        record_event(
             mission_id,
             "assigned",
             f"Asignada a owner='{payload.owner or '—'}', rol='{payload.assigned_role or '—'}'.",
@@ -116,14 +122,14 @@ def update_status(mission_id: str, new_status: MissionStatus, author: str = "ORI
 
     if new_status == MissionStatus.RUNNING and mission.started_at is None:
         mission.started_at = mission.updated_at
-        _record_event(mission_id, "started", "Mission iniciada.", author)
+        record_event(mission_id, "started", "Mission iniciada.", author)
 
     if new_status in _TERMINAL_STATUSES and mission.finished_at is None:
         mission.finished_at = mission.updated_at
-        _record_event(mission_id, "finished", f"Mission finalizada con estado {new_status.value}.", author)
+        record_event(mission_id, "finished", f"Mission finalizada con estado {new_status.value}.", author)
 
     storage.write_mission(mission_id, mission.model_dump(mode="json"))
-    _record_event(
+    record_event(
         mission_id,
         "status_changed",
         f"Estado cambiado de {old_status.value} a {new_status.value}.",
@@ -147,7 +153,7 @@ def add_message(mission_id: str, payload: MessageCreate) -> Message | None:
         attachments=payload.attachments,
     )
     storage.append_message(mission_id, message.model_dump())
-    _record_event(mission_id, "message", f"Mensaje de {payload.sender} a {payload.receiver}.", payload.sender)
+    record_event(mission_id, "message", f"Mensaje de {payload.sender} a {payload.receiver}.", payload.sender)
     return message
 
 

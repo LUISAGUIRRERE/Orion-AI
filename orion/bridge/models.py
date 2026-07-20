@@ -32,6 +32,10 @@ class Mission(BaseModel):
     assigned_role: str = ""
     priority: str = "normal"
     status: MissionStatus = MissionStatus.NEW
+    mission_type: str = Field(
+        default="documentation",
+        description="Which Builder handler executes this mission: documentation, research, scaffold, or code_generation.",
+    )
     created_at: str
     updated_at: str
     started_at: str | None = None
@@ -48,6 +52,7 @@ class MissionCreate(BaseModel):
     business_unit: str = ""
     assigned_role: str = ""
     priority: str = "normal"
+    mission_type: str = "documentation"
     owner: str = ""
     tags: list[str] = Field(default_factory=list)
 

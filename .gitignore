@@ -42,3 +42,6 @@ htmlcov/
 
 # The Window — runtime SQLite database (regenerated automatically on startup)
 workspace/events.db
+
+# Builder Agent — runtime status file (regenerated automatically)
+workspace/builder_state.yaml

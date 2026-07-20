@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
 
+from orion.agents.builder import agent as builder_agent
 from orion.bridge import services
 from orion.bridge.models import (
     Event,
@@ -73,6 +74,25 @@ async def get_events_endpoint(mission_id: str) -> list[Event]:
     """List every timeline event for a mission."""
     _require_mission(mission_id)
     return services.get_events(mission_id)
+
+
+@router.get("/builder/status")
+async def get_builder_status_endpoint() -> dict[str, str | int | None]:
+    """Return the Builder Agent's current operational status.
+
+    Reuses the Command Bridge's existing API router and prefix rather
+    than introducing a new one, per Sprint 006's instruction not to
+    duplicate infrastructure.
+    """
+    state = builder_agent.get_state()
+    return {
+        "status": state.status,
+        "current_mission_id": state.current_mission_id,
+        "current_handler": state.current_handler,
+        "completed_today": state.completed_today,
+        "failed_today": state.failed_today,
+        "last_activity": state.last_activity,
+    }
 
 
 @router.get("/queue", response_model=list[str])

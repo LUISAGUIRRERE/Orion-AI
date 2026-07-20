@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
+from orion.agents.builder import agent as builder_agent
 from orion.bridge import services as bridge_services
 from orion.window import services
 from orion.window.models import BusinessUnit, DashboardSummary, Event
@@ -34,7 +35,13 @@ async def dashboard_page(request: Request) -> HTMLResponse:
     """Render the main dashboard: business unit cards and recent events."""
     summary = services.get_dashboard_summary()
     mission_summary = bridge_services.get_mission_summary()
-    context = {"summary": summary, "mission_summary": mission_summary, **_topbar_context()}
+    builder_state = builder_agent.get_state()
+    context = {
+        "summary": summary,
+        "mission_summary": mission_summary,
+        "builder_state": builder_state,
+        **_topbar_context(),
+    }
     return templates.TemplateResponse(request, "index.html", context)
 
 
