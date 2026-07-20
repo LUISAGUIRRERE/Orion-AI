@@ -36,6 +36,13 @@ RUNTIME_PATHS: tuple[str, ...] = (
     # work, and GitManager.commit() only ever stages the explicit
     # deliverable files a handler produced, never this directory.
     "workspace/companies/",
+    # BETA 004 (Experience Engine): the Knowledge Store's own data
+    # (workspace/knowledge/), for the same reason as workspace/missions/
+    # and workspace/companies/ above -- written by normal Experience
+    # Engine operation right after a mission's own pipeline run
+    # finishes, never part of the deliverable GitManager.commit()
+    # stages.
+    "workspace/knowledge/",
 )
 
 

@@ -21,6 +21,35 @@
     <div class="card-row"><span class="label">Finalizada</span><span>{{ mission.finished_at or "—" }}</span></div>
     <div class="card-row"><span class="label">Tags</span><span>{{ mission.tags | join(", ") if mission.tags else "—" }}</span></div>
 
+    {% if experience_report %}
+    <h2>Experience Report</h2>
+    <div class="card-row"><span class="label">Confianza</span><span>{{ experience_report.confidence_score }}</span></div>
+    <div class="card-row"><span class="label">Objetivos alcanzados</span><span>{{ experience_report.objectives_achieved | join("; ") if experience_report.objectives_achieved else "—" }}</span></div>
+    <div class="card-row"><span class="label">Archivos tocados</span><span>{{ experience_report.files_modified | join(", ") if experience_report.files_modified else "—" }}</span></div>
+    <div class="card-row"><span class="label">Patrones detectados</span><span>{{ experience_report.patterns_detected | join("; ") if experience_report.patterns_detected else "—" }}</span></div>
+    <div class="card-row"><span class="label">Componentes reutilizables</span><span>{{ experience_report.reusable_components | join(", ") if experience_report.reusable_components else "—" }}</span></div>
+    <div class="card-row"><span class="label">Errores encontrados</span><span>{{ experience_report.errors_encountered | join("; ") if experience_report.errors_encountered else "—" }}</span></div>
+    <div class="card-row"><span class="label">Recomendaciones</span><span>{{ experience_report.recommendations | join("; ") if experience_report.recommendations else "—" }}</span></div>
+
+    {% if knowledge_items %}
+    <h3>Conocimiento generado</h3>
+    <table class="events-table">
+        <thead>
+            <tr><th>Tipo</th><th>Titulo</th><th>Confianza</th></tr>
+        </thead>
+        <tbody>
+            {% for item in knowledge_items %}
+            <tr>
+                <td>{{ item.type.value if item.type is not string else item.type }}</td>
+                <td>{{ item.title }}</td>
+                <td>{{ item.confidence }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+    {% endif %}
+
     <h2>Timeline</h2>
     <table class="events-table">
         <thead>

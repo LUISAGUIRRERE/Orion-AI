@@ -13,6 +13,7 @@ from orion.agents.coo import agent as coo_agent
 from orion.agents.coo import metrics as coo_metrics
 from orion.bridge import services as bridge_services
 from orion.execution import pipeline as execution_pipeline
+from orion.experience import knowledge_store, storage as experience_storage
 from orion.projects import registry as project_registry
 from orion.projects import services as project_services
 from orion.window import services
@@ -106,10 +107,16 @@ async def mission_detail_page(request: Request, mission_id: str) -> HTMLResponse
     mission = bridge_services.get_mission(mission_id)
     if mission is None:
         raise HTTPException(status_code=404, detail=f"Mission '{mission_id}' not found")
+    experience_report = experience_storage.load_report(mission_id)
+    knowledge_items = [
+        item for item in knowledge_store.list_items() if item.source_mission_id == mission_id
+    ]
     context = {
         "mission": mission,
         "events": bridge_services.get_events(mission_id),
         "messages": bridge_services.get_messages(mission_id),
+        "experience_report": experience_report,
+        "knowledge_items": knowledge_items,
         **_topbar_context(),
     }
     return templates.TemplateResponse(request, "mission_detail.html", context)

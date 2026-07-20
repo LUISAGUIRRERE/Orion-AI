@@ -252,7 +252,7 @@ def run(mission: Mission) -> PipelineResult:
     state.validation_status = "running"
     _save_state(state)
     bridge_services.record_event(mission.id, "validation_started", "Validaciones iniciadas.", AUTHOR)
-    validation_result = validation.run(task_result.files)
+    validation_result = validation.run(task_result.files, repo_root=repo_root)
 
     if not validation_result.passed:
         bridge_services.record_event(

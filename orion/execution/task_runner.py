@@ -22,6 +22,16 @@ real files at once, each already named by its own repository-relative
 path. TaskRunner relocates every one of them into the target repo the
 same way it already relocated a single ``artifact_path`` file — still
 no change to the Handler interface.
+
+BETA 003 addition: a mission whose ``mission_type`` is ``"executor"``
+skips the legacy handler registry entirely and is delegated to
+``orion.executor.services.run_for_mission`` instead — the new
+Executor, which consumes the PromptPackage orion.prompt_composer
+already composed for this mission (see orion.agents.builder.agent)
+and writes whatever a Provider Adapter produced directly into
+repo_root. This is the only change BETA 003 makes here; the legacy
+mission types (documentation, research, scaffold, code_generation)
+are completely untouched.
 """
 
 from __future__ import annotations
@@ -52,6 +62,12 @@ def execute(mission: Mission, repo_root: Path | None = None) -> TaskResult:
     """
     if repo_root is None:
         repo_root = bridge_storage.REPO_ROOT
+
+    if mission.mission_type == "executor":
+        from orion.executor import services as executor_services  # local import: avoids a module-load-time cycle with orion.executor (which itself imports orion.prompt_composer)
+
+        files, summary = executor_services.run_for_mission(mission, repo_root)
+        return TaskResult(handler_result=HandlerResult(artifacts=files, summary=summary), files=files)
 
     handler = registry.get_handler(mission.mission_type)
     external_project = repo_root != bridge_storage.REPO_ROOT

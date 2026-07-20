@@ -59,3 +59,6 @@ workspace/execution_state.yaml
 # this directory. Ignored here too as a safety net against `git add -A`
 # sweeping test or in-flight mission data into an unrelated commit.
 workspace/missions/
+
+# Experience Engine — Knowledge Store's own runtime data (regenerated per mission)
+workspace/knowledge/
