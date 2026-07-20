@@ -8,6 +8,7 @@ from orion.agents.builder import agent as builder_agent
 from orion.agents.coo import agent as coo_agent
 from orion.agents.coo import metrics as coo_metrics
 from orion.bridge import services
+from orion.execution import pipeline as execution_pipeline
 from orion.bridge.models import (
     Event,
     Message,
@@ -136,6 +137,34 @@ async def get_coo_assignments_endpoint() -> list[dict[str, str | None]]:
                 )
     assignments.sort(key=lambda a: a["timestamp"] or "")
     return assignments
+
+
+@router.get("/execution/status")
+async def get_execution_status_endpoint() -> dict[str, str | None]:
+    """Return the Execution Pipeline's current operational status."""
+    state = execution_pipeline.get_state()
+    return {
+        "workspace": state.workspace,
+        "current_branch": state.current_branch,
+        "current_commit": state.current_commit,
+        "validation_status": state.validation_status,
+        "repository_status": state.repository_status,
+        "last_push": state.last_push,
+        "pull_request": state.pull_request,
+    }
+
+
+@router.get("/execution/history")
+async def get_execution_history_endpoint() -> list[dict[str, object]]:
+    """Return every recorded execution outcome, oldest first."""
+    return execution_pipeline.list_outcomes()
+
+
+@router.get("/execution/current")
+async def get_execution_current_endpoint() -> dict[str, object] | None:
+    """Return the most recently recorded execution outcome, if any."""
+    outcomes = execution_pipeline.list_outcomes()
+    return outcomes[-1] if outcomes else None
 
 
 @router.get("/queue", response_model=list[str])

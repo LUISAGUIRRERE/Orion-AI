@@ -85,6 +85,21 @@
     </div>
 </section>
 
+<section id="execution-pipeline">
+    <h2>Execution Pipeline</h2>
+    <div class="card-grid">
+        <div class="card">
+            <div class="card-row"><span class="label">Workspace</span><span id="pipeline-workspace">{{ execution_state.workspace or "—" }}</span></div>
+            <div class="card-row"><span class="label">Current Branch</span><span id="pipeline-branch">{{ execution_state.current_branch }}</span></div>
+            <div class="card-row"><span class="label">Current Commit</span><span id="pipeline-commit">{{ execution_state.current_commit or "—" }}</span></div>
+            <div class="card-row"><span class="label">Validation Status</span><span id="pipeline-validation">{{ execution_state.validation_status }}</span></div>
+            <div class="card-row"><span class="label">Repository Status</span><span id="pipeline-repo-status">{{ execution_state.repository_status }}</span></div>
+            <div class="card-row"><span class="label">Last Push</span><span id="pipeline-last-push">{{ execution_state.last_push or "—" }}</span></div>
+            <div class="card-row"><span class="label">Pull Request</span><span id="pipeline-pr">{{ execution_state.pull_request or "—" }}</span></div>
+        </div>
+    </div>
+</section>
+
 <section id="eventos" hx-get="/api/events" hx-trigger="every 30s" hx-swap="none">
     <h2>Eventos recientes</h2>
     <table class="events-table">

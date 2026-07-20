@@ -23,10 +23,10 @@ from typing import Any
 
 import yaml
 
-from orion.agents.builder import registry
 from orion.bridge import services as bridge_services
 from orion.bridge import storage as bridge_storage
 from orion.bridge.models import Mission, MissionStatus
+from orion.execution import pipeline as execution_pipeline
 
 AUTHOR = "Builder"
 STATE_FILE: Path = bridge_storage.WORKSPACE_DIR / "builder_state.yaml"
@@ -123,11 +123,8 @@ def process_next() -> Mission | None:
     _save_state(state)
 
     try:
-        handler = registry.get_handler(mission.mission_type)
-        artifacts_dir = bridge_storage.mission_dir(mission.id) / "artifacts"
-        artifacts_dir.mkdir(parents=True, exist_ok=True)
-        result = handler.run(mission, artifacts_dir)
-    except Exception as exc:  # noqa: BLE001 - any handler failure must fail the mission, never crash the agent
+        pipeline_result = execution_pipeline.run(mission)
+    except Exception as exc:  # noqa: BLE001 - the pipeline itself must never crash the agent
         bridge_services.record_event(mission.id, "builder_failed", str(exc), AUTHOR)
         bridge_services.update_status(mission.id, MissionStatus.FAILED, author=AUTHOR)
         state.status = "idle"
@@ -137,6 +134,19 @@ def process_next() -> Mission | None:
         state.touch()
         _save_state(state)
         return bridge_services.get_mission(mission.id)
+
+    if not pipeline_result.success:
+        bridge_services.record_event(mission.id, "builder_failed", pipeline_result.message, AUTHOR)
+        bridge_services.update_status(mission.id, MissionStatus.FAILED, author=AUTHOR)
+        state.status = "idle"
+        state.failed_today += 1
+        state.current_mission_id = None
+        state.current_handler = None
+        state.touch()
+        _save_state(state)
+        return bridge_services.get_mission(mission.id)
+
+    result = pipeline_result.handler_result
 
     bridge_services.record_event(
         mission.id, "builder_progress", f"Handler '{mission.mission_type}' ejecutado.", AUTHOR
