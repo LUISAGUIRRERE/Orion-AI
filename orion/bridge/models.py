@@ -42,6 +42,14 @@ class Mission(BaseModel):
     finished_at: str | None = None
     owner: str = ""
     tags: list[str] = Field(default_factory=list)
+    # Sprint 009 (Multi Project Engine): optional, backward-compatible
+    # extension. A mission created before this Sprint has no
+    # project_id/repository/working_branch on disk; Pydantic fills
+    # them with these defaults on load, so it keeps working exactly
+    # as before — it is simply not attached to any project.
+    project_id: str = Field(default="", description="Which registered project (see orion.projects) this mission belongs to, if any.")
+    repository: str = Field(default="", description="The project's git repository, resolved at creation time from the Project Registry.")
+    working_branch: str = Field(default="", description="The project's base branch the Execution Pipeline branches from.")
 
 
 class MissionCreate(BaseModel):
@@ -55,6 +63,9 @@ class MissionCreate(BaseModel):
     mission_type: str = "documentation"
     owner: str = ""
     tags: list[str] = Field(default_factory=list)
+    project_id: str = ""
+    repository: str = ""
+    working_branch: str = ""
 
 
 class MissionStatusUpdate(BaseModel):

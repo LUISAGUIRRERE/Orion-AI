@@ -27,6 +27,14 @@ RUNTIME_PATHS: tuple[str, ...] = (
     "workspace/coo_state.yaml",
     "workspace/execution_state.yaml",
     "workspace/events.db",
+    # Sprint 009 (Multi Project Engine): the Project Registry's own
+    # data (workspace/companies/), for the same reason as
+    # workspace/missions/ above — it is written by normal Bridge/
+    # Registry operation before the Pipeline ever runs (e.g. seeding
+    # the example companies on startup), not by this mission's own
+    # work, and GitManager.commit() only ever stages the explicit
+    # deliverable files a handler produced, never this directory.
+    "workspace/companies/",
 )
 
 

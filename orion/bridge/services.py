@@ -85,6 +85,14 @@ def create_mission(payload: MissionCreate, author: str = "ORION") -> Mission:
         updated_at=now,
         owner=payload.owner,
         tags=payload.tags,
+        # Sprint 009 (Multi Project Engine): passthrough only. This
+        # function does not know or care what a project is — that
+        # stays entirely in orion.projects, which resolves these
+        # fields before calling here. Left empty, a mission behaves
+        # exactly as it did before this Sprint.
+        project_id=payload.project_id,
+        repository=payload.repository,
+        working_branch=payload.working_branch,
     )
     storage.write_mission(mission_id, mission.model_dump(mode="json"))
     record_event(mission_id, "created", f"Mission '{mission.title}' creada.", author)

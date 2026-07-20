@@ -106,12 +106,21 @@ def commit(message: str, paths: list[str]) -> str:
     the commit made the mission branch "dirty" again relative to its
     own tracked files, so returning to main was refused. Committing
     only the explicit deliverable paths avoids that class of bug
-    entirely. Only ever called after validation has passed — see
-    pipeline.py.
+    entirely.
+
+    Uses ``git add -f`` on these explicit paths only (never on a
+    wildcard): a mission's own artifacts live under
+    ``workspace/missions/<id>/artifacts/``, and that whole tree is
+    itself gitignored (Sprint 008/009, to stop `git add -A` from
+    sweeping in unrelated Bridge/Registry data). ``-f`` overrides that
+    ignore rule for exactly the files TaskRunner reports it wrote —
+    never for anything this function was not explicitly told to add —
+    so the original protection stays intact everywhere else. Only
+    ever called after validation has passed — see pipeline.py.
     """
     if not paths:
         raise GitManagerError("No hay archivos que confirmar: la lista de paths esta vacia.")
-    _run("add", *paths)
+    _run("add", "-f", *paths)
     _run("commit", "-m", message)
     return get_commit_hash()
 

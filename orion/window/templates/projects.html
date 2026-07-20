@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section id="projects-list">
+    <h1>Projects</h1>
+    <div class="card-grid">
+        {% for company in companies %}
+        <a class="card" href="/projects/{{ company.project_id }}">
+            <div class="card-header">
+                <span class="card-name">{{ company.name }}</span>
+            </div>
+            <div class="card-row"><span class="label">Estado</span><span>{{ company.status }}</span></div>
+            <div class="card-row"><span class="label">Misiones</span><span>{{ company.missions_active }} / {{ company.missions_total }}</span></div>
+            <div class="card-row"><span class="label">Builders activos</span><span>{{ company.active_builders }}</span></div>
+            <div class="card-row"><span class="label">Última actividad</span><span>{{ company.last_activity or "—" }}</span></div>
+            <div class="card-row"><span class="label">Repositorio</span><span>{{ company.repository or "—" }}</span></div>
+            <div class="card-row"><span class="label">Branch principal</span><span>{{ company.default_branch }}</span></div>
+            <div class="card-row"><span class="label">Último commit</span><span>{{ (company.last_commit[:12] if company.last_commit else "—") }}</span></div>
+        </a>
+        {% else %}
+        <p>No hay proyectos registrados todavía.</p>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}

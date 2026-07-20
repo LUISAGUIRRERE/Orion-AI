@@ -22,6 +22,35 @@
     </div>
 </section>
 
+<section id="business-overview">
+    <h2>Business Overview</h2>
+    <div class="card-grid">
+        <div class="card">
+            <div class="card-row"><span class="label">Empresas activas</span><span>{{ business_overview.active_projects }}</span></div>
+            <div class="card-row"><span class="label">Repositorios activos</span><span>{{ business_overview.active_repositories }}</span></div>
+            <div class="card-row"><span class="label">Última actividad</span><span>{{ business_overview.last_activity or "—" }}</span></div>
+        </div>
+    </div>
+    <table class="events-table">
+        <thead>
+            <tr><th>Empresa</th><th>Misiones activas</th><th>Builders activos</th><th>Tiempo promedio</th><th>Última actividad</th></tr>
+        </thead>
+        <tbody>
+            {% for company in business_overview.companies %}
+            <tr onclick="window.location='/projects/{{ company.project_id }}'" style="cursor:pointer;">
+                <td>{{ company.name }}</td>
+                <td>{{ company.missions_active }}</td>
+                <td>{{ company.active_builders }}</td>
+                <td>{{ company.average_execution_seconds }}s</td>
+                <td>{{ company.last_activity or "—" }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5">No hay empresas registradas todavía.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+
 <section id="business-units">
     <h2>Business Units</h2>
     <div class="card-grid">

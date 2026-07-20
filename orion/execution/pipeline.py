@@ -34,6 +34,7 @@ from orion.bridge.models import Mission
 from orion.execution import git_manager, task_runner, validation
 from orion.execution.git_manager import GitManagerError
 from orion.execution.workspace import Workspace, WorkspaceError
+from orion.projects import registry as project_registry
 
 AUTHOR = "Pipeline"
 STATE_FILE: Path = bridge_storage.WORKSPACE_DIR / "execution_state.yaml"
@@ -139,13 +140,21 @@ def run(mission: Mission) -> PipelineResult:
     whatever the outcome, and always writes a terminal execution
     outcome for the mission — never leaves it undocumented.
     """
-    branch = f"mission/{mission.id}"
+    # Sprint 009 (Multi Project Engine): namespace the branch by
+    # project when the mission has one, so missions from different
+    # projects can never collide on the same branch name even while
+    # they share this environment's single physical repository. A
+    # mission with no project_id keeps the exact Sprint 008 branch
+    # format — zero behavior change for pre-Sprint-009 missions.
+    project = project_registry.get_project(mission.project_id) if mission.project_id else None
+    branch = f"mission/{mission.project_id}/{mission.id}" if mission.project_id else f"mission/{mission.id}"
     state = _load_state()
     started_monotonic = time.monotonic()
     started_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
 
     outcome: dict[str, Any] = {
         "mission_id": mission.id,
+        "project_id": mission.project_id or None,
         "branch": branch,
         "commit_hash": None,
         "files_created": [],
@@ -183,6 +192,15 @@ def run(mission: Mission) -> PipelineResult:
     bridge_services.record_event(
         mission.id, "workspace_created", f"Workspace preparado para {mission.id}.", AUTHOR
     )
+
+    if project is not None:
+        bridge_services.record_event(
+            mission.id,
+            "project_loaded",
+            f"Proyecto '{project.name}' cargado (repositorio: {project.repository or '-'}, "
+            f"branch base: {project.default_branch}).",
+            AUTHOR,
+        )
 
     try:
         workspace.prepare()
@@ -298,6 +316,14 @@ def run(mission: Mission) -> PipelineResult:
     state.pull_request = pr_url
     _save_state(state)
     bridge_services.record_event(mission.id, "pr_ready", pr_url, AUTHOR)
+
+    if project is not None:
+        bridge_services.record_event(
+            mission.id,
+            "project_completed",
+            f"Trabajo del proyecto '{project.name}' completado para la mision {mission.id}.",
+            AUTHOR,
+        )
 
     return _finish(
         PipelineResult(
