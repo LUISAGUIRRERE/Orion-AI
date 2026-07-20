@@ -190,6 +190,58 @@ def delete_local_branch(name: str, repo_root: Path = REPO_ROOT) -> None:
     _run("branch", "-d", name, repo_root=repo_root)
 
 
+def recent_commits(limit: int = 5, repo_root: Path = REPO_ROOT) -> list[dict[str, str]]:
+    """Return up to ``limit`` recent commits reachable from HEAD, most
+    recent first: hash, author, date (ISO 8601), message.
+
+    Read-only (``git log``), added for the Prompt Composer (BETA 001
+    follow-up) so it can discover real project history without any
+    module other than GitManager ever running git directly. Tolerates
+    a repository with zero commits (returns an empty list instead of
+    raising) the same way the other unborn-repo-tolerant functions in
+    this module do.
+    """
+    try:
+        raw = _run(
+            "log",
+            f"-{limit}",
+            "--date=iso-strict",
+            "--pretty=format:%H%x1f%an%x1f%ad%x1f%s",
+            repo_root=repo_root,
+        )
+    except GitManagerError:
+        return []
+    if not raw:
+        return []
+    commits: list[dict[str, str]] = []
+    for line in raw.split("\n"):
+        parts = line.split("\x1f")
+        if len(parts) != 4:
+            continue
+        commit_hash, author, date, message = parts
+        commits.append({"hash": commit_hash, "author": author, "date": date, "message": message})
+    return commits
+
+
+def list_remote_branches(repo_root: Path = REPO_ROOT) -> list[str]:
+    """Return every remote-tracking branch known locally (e.g.
+    'origin/main', 'origin/mission/atman/MISSION-0022'), as of the
+    last fetch this environment performed -- this never itself talks
+    to the network, so it is always safe and fast to call.
+
+    Read-only (``git branch -r``), added for the Prompt Composer's
+    best-effort "related Pull Requests" discovery: ORION has no
+    GitHub API access in this environment (see ``pull_request_url``
+    below), so a locally-known remote branch is the closest available
+    signal for "there might be an open PR here".
+    """
+    try:
+        raw = _run("branch", "-r", "--format=%(refname:short)", repo_root=repo_root)
+    except GitManagerError:
+        return []
+    return [line.strip() for line in raw.split("\n") if line.strip() and "HEAD ->" not in line]
+
+
 def pull_request_url(branch: str, repo_root: Path = REPO_ROOT) -> str:
     """Build the manual PR-creation URL for a branch.
 

@@ -27,6 +27,7 @@ from orion.bridge import services as bridge_services
 from orion.bridge import storage as bridge_storage
 from orion.bridge.models import Mission, MissionStatus
 from orion.execution import pipeline as execution_pipeline
+from orion.prompt_composer import services as prompt_composer_services
 
 AUTHOR = "Builder"
 STATE_FILE: Path = bridge_storage.WORKSPACE_DIR / "builder_state.yaml"
@@ -127,6 +128,35 @@ def process_next() -> Mission | None:
     state.current_handler = mission.mission_type
     state.current_project_id = mission.project_id or None
     _save_state(state)
+
+    # Prompt Composer integration: the Builder no longer has any
+    # business building context for a mission itself -- that is now
+    # orion.prompt_composer's job. The Composer's PromptPackage is
+    # persisted as evidence and logged on the mission timeline, but is
+    # not yet fed into TaskRunner/the handler: the handlers registered
+    # in orion.agents.builder.registry are still the deterministic
+    # Sprint 006/BETA 001 ones, not a real Executor that consumes a
+    # PromptPackage. Wiring a real Executor is the next Sprint's work
+    # (see docs/PROMPT_COMPOSER.md); composing and recording context
+    # for every mission, starting now, is this Sprint's. Wrapped in
+    # try/except for the same reason the pipeline call below is: a
+    # context-discovery failure must never crash the agent or leave a
+    # mission stuck RUNNING.
+    try:
+        prompt_package = prompt_composer_services.compose_for_mission(mission)
+        bridge_services.record_event(
+            mission.id,
+            "prompt_composed",
+            (
+                f"Prompt Package generado: {len(prompt_package.related_files)} archivo(s) relacionado(s), "
+                f"{len(prompt_package.recent_commits)} commit(s) reciente(s), "
+                f"{len(prompt_package.coding_standards.sources) + len(prompt_package.architecture_rules.sources)} "
+                "documento(s) de contexto descubiertos."
+            ),
+            AUTHOR,
+        )
+    except Exception as exc:  # noqa: BLE001 - composing context must never crash the agent
+        bridge_services.record_event(mission.id, "prompt_composer_failed", str(exc), AUTHOR)
 
     try:
         pipeline_result = execution_pipeline.run(mission)
