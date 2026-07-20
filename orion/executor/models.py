@@ -72,3 +72,32 @@ class ExecutionResult(BaseModel):
     started_at: str | None = None
     finished_at: str | None = None
     duration_seconds: float | None = None
+
+
+class AdapterHealth(BaseModel):
+    """What ProviderAdapter.health_check() reports.
+
+    A real adapter (Claude Code, Codex CLI, ...) uses this to say
+    honestly whether it is currently able to execute -- binary/SDK
+    reachable, credentials present, service reachable, etc. -- rather
+    than only discovering that mid-execute().
+    """
+
+    healthy: bool
+    message: str = ""
+    checked_at: str
+
+
+class AdapterCapabilities(BaseModel):
+    """What ProviderAdapter.capabilities() reports.
+
+    Deliberately small in v1: just enough for the Executor (or a
+    future scheduler) to make a basic decision, without inventing a
+    speculative capability-negotiation protocol before a second real
+    adapter exists to justify one.
+    """
+
+    name: str
+    supports_cancel: bool = False
+    max_timeout_seconds: int | None = None
+    notes: str = ""

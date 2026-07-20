@@ -2,12 +2,12 @@
 provider.
 
 Exists solely to validate the Executor's full contract end to end:
-ExecutionRequest in, ExecutionResult out, real files written, real
+PromptPackage in, ExecutionResult out, real files written, real
 validation, real commit/push/PR. It never calls any external API,
 never reads a credential or secret, and never claims to be a real AI
 provider's response -- every artifact and every summary it produces
 says explicitly, in plain text, that it came from this deterministic
-test adapter. Given the same ExecutionRequest, it always returns the
+test adapter. Given the same PromptPackage, it always returns the
 exact same ExecutionResult (module datetime calls aside): no
 randomness, no network, no hidden state.
 """
@@ -16,8 +16,9 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from orion.executor.models import ExecutionArtifact, ExecutionRequest, ExecutionResult, ExecutionStatus
+from orion.executor.models import ExecutionArtifact, ExecutionResult, ExecutionStatus
 from orion.executor.registry import register_adapter
+from orion.prompt_composer.models import PromptPackage
 
 
 def _now_iso() -> str:
@@ -25,13 +26,21 @@ def _now_iso() -> str:
 
 
 class DeterministicLocalAdapter:
-    """See module docstring. Registered under 'deterministic_local'."""
+    """See module docstring. Registered under 'deterministic_local'.
+
+    Uses ProviderAdapter's default health_check()/cancel()/
+    capabilities() as-is (via structural typing -- this class doesn't
+    inherit from ProviderAdapter, the same way it didn't before this
+    Sprint; orion.executor.registry never checks isinstance, only
+    ``.name`` and ``.execute``). Its own capabilities() override below
+    exists only to say something more specific than the generic
+    default message.
+    """
 
     name = "deterministic_local"
 
-    def execute(self, request: ExecutionRequest) -> ExecutionResult:
+    def execute(self, package: PromptPackage) -> ExecutionResult:
         started_at = _now_iso()
-        package = request.prompt_package
 
         lines = [
             "# Execution log (adaptador deterministico de prueba)",
@@ -41,7 +50,7 @@ class DeterministicLocalAdapter:
             "",
             "**Este archivo NO fue generado por un proveedor de IA real.** "
             "El adaptador deterministico existe unicamente para validar el "
-            "contrato completo del Executor (ExecutionRequest -> "
+            "contrato completo del Executor (PromptPackage -> "
             "ExecutionResult -> archivos -> validacion -> commit -> push -> "
             "PR), nunca para simular una respuesta real.",
             "",
@@ -61,7 +70,7 @@ class DeterministicLocalAdapter:
             content=content,
             description=(
                 "Registro deterministico generado por el adaptador de prueba; "
-                "confirma que el ExecutionRequest llego completo y que el "
+                "confirma que el PromptPackage llego completo y que el "
                 "contrato del Executor funciona de punta a punta."
             ),
         )
@@ -78,6 +87,16 @@ class DeterministicLocalAdapter:
             started_at=started_at,
             finished_at=_now_iso(),
             duration_seconds=0.0,
+        )
+
+    def capabilities(self):
+        from orion.executor.models import AdapterCapabilities
+
+        return AdapterCapabilities(
+            name=self.name,
+            supports_cancel=False,
+            max_timeout_seconds=None,
+            notes="Adaptador de prueba determinista; nunca falla ni tarda, no hay nada que cancelar.",
         )
 
 

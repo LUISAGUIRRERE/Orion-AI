@@ -14,6 +14,7 @@ Run with:
 
 from __future__ import annotations
 
+import os
 import subprocess
 import tempfile
 import time
@@ -24,11 +25,18 @@ from pathlib import Path
 from orion.bridge import storage as bridge_storage
 from orion.bridge.models import Mission, MissionStatus
 from orion.execution import task_runner
-from orion.executor.models import ExecutionArtifact, ExecutionRequest, ExecutionResult, ExecutionStatus
+from orion.executor.adapters.base import ProviderAdapter
+from orion.executor.models import ExecutionArtifact, ExecutionResult, ExecutionStatus
 from orion.executor.registry import get_adapter, register_adapter
-from orion.executor.services import ExecutorError, _resolve_adapter_name, run_for_mission
+from orion.executor.services import (
+    ExecutorError,
+    ORION_PROVIDER_ENV_VAR,
+    _resolve_adapter_name,
+    run_for_mission,
+)
 from orion.prompt_composer import composer as pc_composer
 from orion.prompt_composer import storage as pc_storage
+from orion.prompt_composer.models import PromptPackage
 
 
 def _now() -> str:
@@ -65,10 +73,10 @@ class _SlowAdapter:
 
     name = "test_slow"
 
-    def execute(self, request: ExecutionRequest) -> ExecutionResult:
+    def execute(self, package: PromptPackage) -> ExecutionResult:
         time.sleep(2)
         return ExecutionResult(
-            mission_id=request.mission_id, adapter=self.name, status=ExecutionStatus.SUCCEEDED
+            mission_id=package.mission.id, adapter=self.name, status=ExecutionStatus.SUCCEEDED
         )
 
 
@@ -78,7 +86,7 @@ class _CrashingAdapter:
 
     name = "test_crashing"
 
-    def execute(self, request: ExecutionRequest) -> ExecutionResult:
+    def execute(self, package: PromptPackage) -> ExecutionResult:
         raise ValueError("simulated adapter failure, never a real provider error")
 
 
@@ -89,9 +97,9 @@ class _EchoAdapter:
 
     name = "test_echo"
 
-    def execute(self, request: ExecutionRequest) -> ExecutionResult:
+    def execute(self, package: PromptPackage) -> ExecutionResult:
         return ExecutionResult(
-            mission_id=request.mission_id,
+            mission_id=package.mission.id,
             adapter=self.name,
             status=ExecutionStatus.SUCCEEDED,
             artifacts=[ExecutionArtifact(path="echo.txt", content="echoed", description="test")],
@@ -129,6 +137,13 @@ class ExecutorContractTests(unittest.TestCase):
         pc_storage.save(mission.id, package)
         self._cleanup_mission_ids.append(mission.id)
 
+    def _events(self, mission_id: str) -> list[dict]:
+        import yaml
+
+        events_path = bridge_storage.mission_dir(mission_id) / "events.yaml"
+        self.assertTrue(events_path.is_file())
+        return yaml.safe_load(events_path.read_text(encoding="utf-8"))
+
     def test_deterministic_adapter_is_the_default(self) -> None:
         mission = _make_mission()
         self.assertEqual(_resolve_adapter_name(mission), "deterministic_local")
@@ -136,6 +151,22 @@ class ExecutorContractTests(unittest.TestCase):
     def test_adapter_tag_overrides_the_default(self) -> None:
         mission = _make_mission(tags=["adapter:test_echo"])
         self.assertEqual(_resolve_adapter_name(mission), "test_echo")
+
+    def test_default_adapter_respects_orion_provider_env_var(self) -> None:
+        # No tag on the mission -- the default must come from
+        # ORION_PROVIDER when it's set, without any code change. This
+        # is the literal success criterion for the Claude Code
+        # Provider Adapter Sprint.
+        mission = _make_mission()
+        original = os.environ.get(ORION_PROVIDER_ENV_VAR)
+        os.environ[ORION_PROVIDER_ENV_VAR] = "test_echo"
+        try:
+            self.assertEqual(_resolve_adapter_name(mission), "test_echo")
+        finally:
+            if original is None:
+                os.environ.pop(ORION_PROVIDER_ENV_VAR, None)
+            else:
+                os.environ[ORION_PROVIDER_ENV_VAR] = original
 
     def test_missing_prompt_package_is_a_hard_failure(self) -> None:
         mission = _make_mission(id="MISSION-EXECUTOR-NO-PACKAGE")
@@ -147,6 +178,37 @@ class ExecutorContractTests(unittest.TestCase):
         self._prepare(mission)
         with self.assertRaises(ExecutorError):
             run_for_mission(mission, self.repo_root)
+
+    def test_unknown_adapter_triggers_dynamic_provider_discovery(self) -> None:
+        # Simulates a real orion.providers.<name> package that
+        # registers itself as an import-time side effect (exactly
+        # what orion.providers.claude_code does), without needing a
+        # real filesystem package for this unit test: it patches
+        # importlib.import_module for the duration of this single call
+        # only, and restores it immediately after.
+        mission = _make_mission(id="MISSION-EXECUTOR-DISCOVERY", tags=["adapter:test_discovered"])
+        self._prepare(mission)
+
+        discovered_adapter = _EchoAdapter()
+        discovered_adapter.name = "test_discovered"  # type: ignore[attr-defined]
+        calls: list[str] = []
+
+        def fake_import_module(module_name: str):
+            calls.append(module_name)
+            register_adapter(discovered_adapter)
+
+        import orion.executor.services as executor_services
+
+        original_import_module = executor_services.importlib.import_module
+        executor_services.importlib.import_module = fake_import_module  # type: ignore[assignment]
+        try:
+            files, summary = run_for_mission(mission, self.repo_root)
+        finally:
+            executor_services.importlib.import_module = original_import_module
+
+        self.assertEqual(calls, ["orion.providers.test_discovered"])
+        self.assertEqual(files, ["echo.txt"])
+        self.assertEqual(summary, "echoed ok")
 
     def test_successful_execution_writes_real_files(self) -> None:
         mission = _make_mission(id="MISSION-EXECUTOR-ECHO", tags=["adapter:test_echo"])
@@ -177,6 +239,10 @@ class ExecutorContractTests(unittest.TestCase):
         self.assertIsNotNone(result)
         self.assertEqual(result.status, ExecutionStatus.FAILED)
         self.assertIn("simulated adapter failure", result.error)
+
+        event_types = [e["type"] for e in self._events(mission.id)]
+        self.assertIn("execution_failed", event_types)
+        self.assertIn("provider_failed", event_types)
 
     def test_slow_adapter_times_out(self) -> None:
         mission = _make_mission(id="MISSION-EXECUTOR-TIMEOUT", tags=["adapter:test_slow"])
@@ -209,15 +275,13 @@ class ExecutorContractTests(unittest.TestCase):
         # regardless of whether mission.yaml exists there, so this checks that
         # file directly rather than going through get_events (which requires
         # a persisted Mission).
-        events_path = bridge_storage.mission_dir(mission.id) / "events.yaml"
-        self.assertTrue(events_path.is_file())
-        import yaml
-
-        events = yaml.safe_load(events_path.read_text(encoding="utf-8"))
-        event_types = [e["type"] for e in events]
+        event_types = [e["type"] for e in self._events(mission.id)]
         self.assertIn("execution_requested", event_types)
         self.assertIn("execution_started", event_types)
         self.assertIn("execution_completed", event_types)
+        self.assertIn("provider_selected", event_types)
+        self.assertIn("provider_started", event_types)
+        self.assertIn("provider_finished", event_types)
 
     def test_no_network_or_credentials_used(self) -> None:
         # Structural guard: the deterministic adapter's module must not
@@ -230,6 +294,36 @@ class ExecutorContractTests(unittest.TestCase):
         source = inspect.getsource(deterministic)
         for forbidden in ("requests", "httpx", "urllib", "socket", "api_key", "API_KEY", "Authorization"):
             self.assertNotIn(forbidden, source)
+
+
+class ProviderAdapterDefaultsTests(unittest.TestCase):
+    """Tests for the extended ProviderAdapter base contract itself:
+    health_check()/cancel()/capabilities() must have safe, honest
+    defaults so any adapter that only overrides execute() (like
+    DeterministicLocalAdapter) still behaves correctly."""
+
+    class _MinimalAdapter(ProviderAdapter):
+        name = "test_minimal_adapter"
+
+        def execute(self, package: PromptPackage) -> ExecutionResult:  # pragma: no cover - unused
+            raise NotImplementedError
+
+    def test_default_health_check_is_healthy(self) -> None:
+        adapter = self._MinimalAdapter()
+        health = adapter.health_check()
+        self.assertTrue(health.healthy)
+        self.assertTrue(health.checked_at)
+
+    def test_default_cancel_is_honestly_false(self) -> None:
+        adapter = self._MinimalAdapter()
+        self.assertFalse(adapter.cancel("MISSION-ANY"))
+
+    def test_default_capabilities(self) -> None:
+        adapter = self._MinimalAdapter()
+        caps = adapter.capabilities()
+        self.assertEqual(caps.name, "test_minimal_adapter")
+        self.assertFalse(caps.supports_cancel)
+        self.assertIsNone(caps.max_timeout_seconds)
 
 
 if __name__ == "__main__":
