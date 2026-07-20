@@ -50,6 +50,13 @@ class Mission(BaseModel):
     project_id: str = Field(default="", description="Which registered project (see orion.projects) this mission belongs to, if any.")
     repository: str = Field(default="", description="The project's git repository, resolved at creation time from the Project Registry.")
     working_branch: str = Field(default="", description="The project's base branch the Execution Pipeline branches from.")
+    # ORION ALPHA 001: optional, backward-compatible addition. When
+    # set, the Execution Pipeline writes this mission's single
+    # deliverable at exactly this path inside the target project's
+    # repository (e.g. "docs/ARCHITECTURE.md") instead of a generic
+    # scratch location. Empty means "let the handler's own default
+    # filename stand" — unchanged Sprint 008 behavior.
+    artifact_path: str = Field(default="", description="Exact repository-relative path this mission's deliverable should be written to, if any.")
 
 
 class MissionCreate(BaseModel):
@@ -66,6 +73,7 @@ class MissionCreate(BaseModel):
     project_id: str = ""
     repository: str = ""
     working_branch: str = ""
+    artifact_path: str = ""
 
 
 class MissionStatusUpdate(BaseModel):

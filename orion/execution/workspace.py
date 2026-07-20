@@ -12,6 +12,7 @@ starts clean.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from orion.execution import git_manager
 
@@ -44,10 +45,20 @@ class WorkspaceError(RuntimeError):
 
 @dataclass
 class Workspace:
-    """A single mission's isolated slice of the repository."""
+    """A single mission's isolated slice of a repository.
+
+    ORION ALPHA 001: ``repo_root`` defaults to Orion-AI's own checkout
+    (``git_manager.REPO_ROOT``), so every mission with no project — or
+    a project without its own clone yet — behaves exactly as in
+    Sprint 008/009. A project with a ``local_path`` (see
+    orion/projects/models.py) resolves to a different ``repo_root``
+    here, so its missions branch, commit, and push against that
+    project's own physical repository instead.
+    """
 
     mission_id: str
     base_branch: str = "main"
+    repo_root: Path = field(default_factory=lambda: git_manager.REPO_ROOT)
     files: list[str] = field(default_factory=list)
 
     def prepare(self) -> None:
@@ -57,8 +68,8 @@ class Workspace:
         repository is dirty — never assumes it is safe to discard
         whatever is there.
         """
-        git_manager.checkout(self.base_branch)
-        if not git_manager.is_clean(exclude=list(RUNTIME_PATHS)):
+        git_manager.checkout(self.base_branch, repo_root=self.repo_root)
+        if not git_manager.is_clean(exclude=list(RUNTIME_PATHS), repo_root=self.repo_root):
             raise WorkspaceError(
                 f"El repositorio tiene cambios sin confirmar en '{self.base_branch}'; "
                 f"no se puede preparar un Workspace limpio para {self.mission_id}."
@@ -70,4 +81,4 @@ class Workspace:
 
     def cleanup(self) -> None:
         """Return the checkout to the base branch, leaving no trace."""
-        git_manager.checkout(self.base_branch)
+        git_manager.checkout(self.base_branch, repo_root=self.repo_root)

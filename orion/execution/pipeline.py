@@ -121,14 +121,14 @@ def list_outcomes() -> list[dict[str, Any]]:
     return outcomes
 
 
-def _discard_files(files: list[str]) -> None:
+def _discard_files(files: list[str], repo_root: Path) -> None:
     """Remove exactly the files a failed mission just created.
 
     Deliberately not ``git clean -fd``: only the specific paths
     TaskRunner reported are touched, nothing else in the tree.
     """
     for rel_path in files:
-        path = bridge_storage.REPO_ROOT / rel_path
+        path = repo_root / rel_path
         if path.is_file():
             path.unlink()
 
@@ -148,6 +148,14 @@ def run(mission: Mission) -> PipelineResult:
     # format — zero behavior change for pre-Sprint-009 missions.
     project = project_registry.get_project(mission.project_id) if mission.project_id else None
     branch = f"mission/{mission.project_id}/{mission.id}" if mission.project_id else f"mission/{mission.id}"
+    # ORION ALPHA 001: a project with its own local clone (see
+    # orion/projects/models.py Project.local_path) makes every git
+    # operation below run against that repository instead of
+    # Orion-AI's own — the entire rest of this function is unchanged
+    # either way. No project, or a project with no local_path yet,
+    # keeps the exact Sprint 008 behavior (Orion-AI's own repo_root).
+    repo_root = Path(project.local_path) if project and project.local_path else git_manager.REPO_ROOT
+    base_branch = project.default_branch if project else "main"
     state = _load_state()
     started_monotonic = time.monotonic()
     started_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -178,14 +186,14 @@ def run(mission: Mission) -> PipelineResult:
         _write_outcome(mission.id, outcome)
 
         state.workspace = None
-        state.current_branch = "main"
+        state.current_branch = base_branch
         state.validation_status = validation_status
         state.repository_status = repo_status
         _save_state(state)
         return result
 
     # 1. Workspace
-    workspace = Workspace(mission_id=mission.id)
+    workspace = Workspace(mission_id=mission.id, base_branch=base_branch, repo_root=repo_root)
     state.workspace = mission.id
     state.repository_status = "preparing"
     _save_state(state)
@@ -212,7 +220,7 @@ def run(mission: Mission) -> PipelineResult:
 
     # 2. Branch
     try:
-        git_manager.create_branch(branch)
+        git_manager.create_branch(branch, base=base_branch, repo_root=repo_root)
     except GitManagerError as exc:
         workspace.cleanup()
         bridge_services.record_event(mission.id, "execution_finished", str(exc), AUTHOR)
@@ -227,7 +235,7 @@ def run(mission: Mission) -> PipelineResult:
     # 3. Execute the mission's actual work
     bridge_services.record_event(mission.id, "execution_started", "Ejecucion del trabajo iniciada.", AUTHOR)
     try:
-        task_result = task_runner.execute(mission)
+        task_result = task_runner.execute(mission, repo_root=repo_root)
     except Exception as exc:  # noqa: BLE001 - any handler failure must fail the mission cleanly
         bridge_services.record_event(mission.id, "execution_finished", f"Fallo la ejecucion: {exc}", AUTHOR)
         workspace.cleanup()
@@ -250,7 +258,7 @@ def run(mission: Mission) -> PipelineResult:
         bridge_services.record_event(
             mission.id, "validation_failed", "; ".join(validation_result.errors), AUTHOR
         )
-        _discard_files(task_result.files)
+        _discard_files(task_result.files, repo_root)
         workspace.cleanup()
         return _finish(
             PipelineResult(
@@ -268,10 +276,12 @@ def run(mission: Mission) -> PipelineResult:
     # operational data (see GitManager.commit's docstring).
     try:
         commit_hash = git_manager.commit(
-            f"feat: mission {mission.id} — {mission.title}", paths=task_result.files
+            f"feat: mission {mission.id} — {mission.title}",
+            paths=task_result.files,
+            repo_root=repo_root,
         )
     except GitManagerError as exc:
-        _discard_files(task_result.files)
+        _discard_files(task_result.files, repo_root)
         workspace.cleanup()
         bridge_services.record_event(mission.id, "execution_finished", f"Fallo el commit: {exc}", AUTHOR)
         return _finish(
@@ -286,7 +296,7 @@ def run(mission: Mission) -> PipelineResult:
 
     # 6. Push
     try:
-        git_manager.push(branch)
+        git_manager.push(branch, repo_root=repo_root)
     except GitManagerError as exc:
         workspace.cleanup()
         bridge_services.record_event(mission.id, "execution_finished", f"Fallo el push: {exc}", AUTHOR)
@@ -312,7 +322,7 @@ def run(mission: Mission) -> PipelineResult:
     bridge_services.record_event(mission.id, "push_completed", f"Rama '{branch}' publicada.", AUTHOR)
 
     # 7. Pull Request (URL only — api.github.com is unreachable here)
-    pr_url = git_manager.pull_request_url(branch)
+    pr_url = git_manager.pull_request_url(branch, repo_root=repo_root)
     state.pull_request = pr_url
     _save_state(state)
     bridge_services.record_event(mission.id, "pr_ready", pr_url, AUTHOR)

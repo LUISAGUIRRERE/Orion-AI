@@ -83,6 +83,7 @@ def register_project(payload: ProjectCreate) -> Project:
         description=payload.description,
         repository=payload.repository,
         default_branch=payload.default_branch,
+        local_path=payload.local_path,
         status=payload.status,
         created_at=now,
         updated_at=now,
