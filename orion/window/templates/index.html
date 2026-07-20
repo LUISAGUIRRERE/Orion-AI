@@ -40,6 +40,20 @@
     <a class="back-link" href="/missions">Ver todas las misiones &rarr;</a>
 </section>
 
+<section id="builder">
+    <h2>Builder</h2>
+    <div class="card-grid">
+        <div class="card">
+            <div class="card-row"><span class="label">Status</span><span id="builder-status">{{ builder_state.status }}</span></div>
+            <div class="card-row"><span class="label">Current Mission</span><span id="builder-current-mission">{{ builder_state.current_mission_id or "—" }}</span></div>
+            <div class="card-row"><span class="label">Completed Today</span><span id="builder-completed-today">{{ builder_state.completed_today }}</span></div>
+            <div class="card-row"><span class="label">Failed Today</span><span id="builder-failed-today">{{ builder_state.failed_today }}</span></div>
+            <div class="card-row"><span class="label">Current Handler</span><span id="builder-current-handler">{{ builder_state.current_handler or "—" }}</span></div>
+            <div class="card-row"><span class="label">Last Activity</span><span id="builder-last-activity">{{ builder_state.last_activity or "—" }}</span></div>
+        </div>
+    </div>
+</section>
+
 <section id="eventos" hx-get="/api/events" hx-trigger="every 30s" hx-swap="none">
     <h2>Eventos recientes</h2>
     <table class="events-table">
