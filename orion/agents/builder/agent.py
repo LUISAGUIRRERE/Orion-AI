@@ -39,6 +39,11 @@ class BuilderState:
     status: str = "idle"
     current_mission_id: str | None = None
     current_handler: str | None = None
+    # Sprint 009 (Multi Project Engine): minimal, backward-compatible
+    # addition — which project (see orion.projects) the current
+    # mission belongs to, if any. None for missions with no
+    # project_id, exactly like before this Sprint.
+    current_project_id: str | None = None
     completed_today: int = 0
     failed_today: int = 0
     last_activity: str | None = None
@@ -120,6 +125,7 @@ def process_next() -> Mission | None:
     bridge_services.record_event(mission.id, "builder_started", "Builder inicio la ejecucion.", AUTHOR)
 
     state.current_handler = mission.mission_type
+    state.current_project_id = mission.project_id or None
     _save_state(state)
 
     try:
@@ -131,6 +137,7 @@ def process_next() -> Mission | None:
         state.failed_today += 1
         state.current_mission_id = None
         state.current_handler = None
+        state.current_project_id = None
         state.touch()
         _save_state(state)
         return bridge_services.get_mission(mission.id)
@@ -142,6 +149,7 @@ def process_next() -> Mission | None:
         state.failed_today += 1
         state.current_mission_id = None
         state.current_handler = None
+        state.current_project_id = None
         state.touch()
         _save_state(state)
         return bridge_services.get_mission(mission.id)

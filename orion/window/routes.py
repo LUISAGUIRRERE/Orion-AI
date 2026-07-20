@@ -13,6 +13,8 @@ from orion.agents.coo import agent as coo_agent
 from orion.agents.coo import metrics as coo_metrics
 from orion.bridge import services as bridge_services
 from orion.execution import pipeline as execution_pipeline
+from orion.projects import registry as project_registry
+from orion.projects import services as project_services
 from orion.window import services
 from orion.window.models import BusinessUnit, DashboardSummary, Event
 
@@ -42,6 +44,7 @@ async def dashboard_page(request: Request) -> HTMLResponse:
     coo_state = coo_agent.get_state()
     coo_metrics_data = coo_metrics.compute()
     execution_state = execution_pipeline.get_state()
+    business_overview = project_services.business_overview()
     context = {
         "summary": summary,
         "mission_summary": mission_summary,
@@ -49,6 +52,7 @@ async def dashboard_page(request: Request) -> HTMLResponse:
         "coo_state": coo_state,
         "coo_metrics": coo_metrics_data,
         "execution_state": execution_state,
+        "business_overview": business_overview,
         **_topbar_context(),
     }
     return templates.TemplateResponse(request, "index.html", context)
@@ -62,6 +66,30 @@ async def business_detail_page(request: Request, slug: str) -> HTMLResponse:
         raise HTTPException(status_code=404, detail=f"Business unit '{slug}' not found")
     context = {"unit": unit, **_topbar_context()}
     return templates.TemplateResponse(request, "project.html", context)
+
+
+@pages_router.get("/projects", response_class=HTMLResponse)
+async def projects_page(request: Request) -> HTMLResponse:
+    """Render the list of every project ORION administers."""
+    projects = project_registry.list_projects()
+    companies = [project_services.describe_project(p) for p in projects]
+    context = {"companies": companies, **_topbar_context()}
+    return templates.TemplateResponse(request, "projects.html", context)
+
+
+@pages_router.get("/projects/{project_id}", response_class=HTMLResponse)
+async def project_detail_page(request: Request, project_id: str) -> HTMLResponse:
+    """Render a single project: configuration, metrics, and its missions."""
+    project = project_registry.get_project(project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail=f"Project '{project_id}' not found")
+    context = {
+        "project": project,
+        "summary": project_services.describe_project(project),
+        "missions": project_services.missions_for_project(project_id),
+        **_topbar_context(),
+    }
+    return templates.TemplateResponse(request, "project_detail.html", context)
 
 
 @pages_router.get("/missions", response_class=HTMLResponse)

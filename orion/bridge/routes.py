@@ -92,6 +92,9 @@ async def get_builder_status_endpoint() -> dict[str, str | int | None]:
         "status": state.status,
         "current_mission_id": state.current_mission_id,
         "current_handler": state.current_handler,
+        # Sprint 009 (Multi Project Engine): minimal, documented
+        # addition — surfaces BuilderState.current_project_id.
+        "current_project_id": state.current_project_id,
         "completed_today": state.completed_today,
         "failed_today": state.failed_today,
         "last_activity": state.last_activity,
