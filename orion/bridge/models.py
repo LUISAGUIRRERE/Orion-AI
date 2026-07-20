@@ -57,6 +57,16 @@ class Mission(BaseModel):
     # scratch location. Empty means "let the handler's own default
     # filename stand" — unchanged Sprint 008 behavior.
     artifact_path: str = Field(default="", description="Exact repository-relative path this mission's deliverable should be written to, if any.")
+    # BETA 001: optional, backward-compatible addition. When set (a
+    # mapping of repository-relative path -> exact file content), the
+    # CodeGenerationHandler writes every entry verbatim (no template
+    # wrapping) and the Execution Pipeline relocates each one into the
+    # target repository -- a single mission can now produce several
+    # real, related files (e.g. a set of UI components) in one branch/
+    # commit/PR. Empty means "not used" -- every mission created
+    # before this Sprint falls back to the original single-stub
+    # behavior.
+    artifact_files: dict[str, str] = Field(default_factory=dict, description="Multiple real file contents this mission produces, keyed by exact repository-relative path.")
 
 
 class MissionCreate(BaseModel):
@@ -74,6 +84,7 @@ class MissionCreate(BaseModel):
     repository: str = ""
     working_branch: str = ""
     artifact_path: str = ""
+    artifact_files: dict[str, str] = Field(default_factory=dict)
 
 
 class MissionStatusUpdate(BaseModel):

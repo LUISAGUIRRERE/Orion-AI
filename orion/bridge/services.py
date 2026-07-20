@@ -94,6 +94,7 @@ def create_mission(payload: MissionCreate, author: str = "ORION") -> Mission:
         repository=payload.repository,
         working_branch=payload.working_branch,
         artifact_path=payload.artifact_path,
+        artifact_files=payload.artifact_files,
     )
     storage.write_mission(mission_id, mission.model_dump(mode="json"))
     record_event(mission_id, "created", f"Mission '{mission.title}' creada.", author)

@@ -15,6 +15,13 @@ Orion-AI's own workspace. When a mission also sets ``artifact_path``
 relocated there after it runs — the Handler interface itself
 (``MissionHandler.run``) is untouched, so this stays a TaskRunner-only
 change, not a Builder change.
+
+BETA 001 addition: when a mission instead sets ``artifact_files`` (see
+orion.bridge.models.Mission), CodeGenerationHandler writes several
+real files at once, each already named by its own repository-relative
+path. TaskRunner relocates every one of them into the target repo the
+same way it already relocated a single ``artifact_path`` file — still
+no change to the Handler interface.
 """
 
 from __future__ import annotations
@@ -60,7 +67,21 @@ def execute(mission: Mission, repo_root: Path | None = None) -> TaskResult:
 
     result = handler.run(mission, artifacts_dir)
 
-    if external_project and mission.artifact_path:
+    if external_project and mission.artifact_files:
+        # BETA 001: the handler already wrote each file under
+        # artifacts_dir at its own repo-relative path (result.artifacts
+        # holds those relative paths, not bare filenames). Relocate
+        # every one into the real target repository, then remove the
+        # now-empty scratch tree this mission used.
+        files = []
+        for relpath in result.artifacts:
+            produced = artifacts_dir / relpath
+            target = repo_root / relpath
+            target.parent.mkdir(parents=True, exist_ok=True)
+            produced.replace(target)
+            files.append(relpath)
+        _cleanup_empty(artifacts_dir)
+    elif external_project and mission.artifact_path:
         produced = artifacts_dir / result.artifacts[0]
         target = repo_root / mission.artifact_path
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -77,3 +98,24 @@ def execute(mission: Mission, repo_root: Path | None = None) -> TaskResult:
         ]
 
     return TaskResult(handler_result=result, files=files)
+
+
+def _cleanup_empty(root: Path) -> None:
+    """Best-effort removal of ``root`` and any subdirectories left
+    behind after every file inside it was relocated elsewhere. Only
+    ever called on a mission's own scratch directory, never on
+    ``.orion-scratch`` itself, so it can never disturb another
+    mission's in-flight scratch data.
+    """
+    if not root.exists():
+        return
+    for path in sorted(root.rglob("*"), key=lambda p: len(p.parts), reverse=True):
+        if path.is_dir():
+            try:
+                path.rmdir()
+            except OSError:
+                pass
+    try:
+        root.rmdir()
+    except OSError:
+        pass
