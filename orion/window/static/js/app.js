@@ -50,3 +50,54 @@
     refresh();
     setInterval(refresh, 10000);
 })();
+
+/**
+ * Poll the COO Agent's status and metrics every 10s and refresh both the
+ * COO card and the Executive Summary section in place, for the same
+ * reason as pollBuilderStatus above: hx-swap="none" polling would fetch
+ * but discard the response. Two endpoints are combined (status + metrics)
+ * because the COO card and Executive Summary both depend on metrics that
+ * are recalculated on demand rather than stored on the COO's own state.
+ * No-op on any page without the COO card.
+ */
+(function pollCOOStatus() {
+    const statusEl = document.getElementById("coo-status");
+    if (!statusEl) return;
+
+    async function refresh() {
+        try {
+            const [statusRes, metricsRes] = await Promise.all([
+                fetch("/api/coo/status"),
+                fetch("/api/coo/metrics"),
+            ]);
+            if (!statusRes.ok || !metricsRes.ok) return;
+            const status = await statusRes.json();
+            const metrics = await metricsRes.json();
+
+            document.getElementById("coo-status").textContent = status.status;
+            document.getElementById("coo-assignments-today").textContent = status.assignments_today;
+            document.getElementById("coo-last-assignment").textContent = status.last_assignment || "\u2014";
+            document.getElementById("coo-builders-available").textContent = metrics.builders_available;
+            document.getElementById("coo-builders-busy").textContent = metrics.builders_busy;
+            document.getElementById("coo-pending-missions").textContent = metrics.queue_size;
+            document.getElementById("coo-average-mission-time").textContent = metrics.average_execution_seconds;
+
+            const execTotal = document.getElementById("exec-total-missions");
+            if (execTotal) {
+                execTotal.textContent = metrics.missions_total;
+                document.getElementById("exec-ready").textContent = metrics.missions_ready;
+                document.getElementById("exec-running").textContent = metrics.missions_running;
+                document.getElementById("exec-review").textContent = metrics.missions_review;
+                document.getElementById("exec-done-today").textContent = metrics.missions_done_today;
+                document.getElementById("exec-failed-today").textContent = metrics.missions_failed_today;
+                document.getElementById("exec-avg-completion").textContent = metrics.average_execution_seconds;
+                document.getElementById("exec-queue-size").textContent = metrics.queue_size;
+            }
+        } catch (err) {
+            // Transient network error: the next poll will retry.
+        }
+    }
+
+    refresh();
+    setInterval(refresh, 10000);
+})();

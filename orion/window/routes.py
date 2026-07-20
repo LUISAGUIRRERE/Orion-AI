@@ -9,6 +9,8 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 from orion.agents.builder import agent as builder_agent
+from orion.agents.coo import agent as coo_agent
+from orion.agents.coo import metrics as coo_metrics
 from orion.bridge import services as bridge_services
 from orion.window import services
 from orion.window.models import BusinessUnit, DashboardSummary, Event
@@ -36,10 +38,14 @@ async def dashboard_page(request: Request) -> HTMLResponse:
     summary = services.get_dashboard_summary()
     mission_summary = bridge_services.get_mission_summary()
     builder_state = builder_agent.get_state()
+    coo_state = coo_agent.get_state()
+    coo_metrics_data = coo_metrics.compute()
     context = {
         "summary": summary,
         "mission_summary": mission_summary,
         "builder_state": builder_state,
+        "coo_state": coo_state,
+        "coo_metrics": coo_metrics_data,
         **_topbar_context(),
     }
     return templates.TemplateResponse(request, "index.html", context)
