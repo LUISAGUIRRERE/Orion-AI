@@ -1,0 +1,14 @@
+name: RESONANCE
+status: planning
+health: yellow
+objective: Definir modelo de negocio inicial.
+missions:
+- Completar investigación de mercado
+business:
+  stage: planning
+  revenue_status: pre-revenue
+events: []
+decisions:
+- Aprobar plan de negocio inicial
+opportunities:
+- Alianza estratégica potencial

@@ -1,0 +1,15 @@
+name: ATMAN
+status: active
+health: green
+objective: Escalar el negocio principal y consolidar los procesos core.
+missions:
+- Optimizar el funnel de ventas
+- Cerrar acuerdo con proveedor clave
+business:
+  stage: growth
+  revenue_status: estable
+events: []
+decisions:
+- Aprobar presupuesto de marketing Q3
+opportunities:
+- Expandir a nuevo segmento de clientes

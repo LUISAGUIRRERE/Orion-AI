@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section id="dashboard">
+    <h1>Dashboard</h1>
+    <p class="subtitle">Estado general de ORION al {{ current_date }}, {{ current_time }}.</p>
+</section>
+
+<section id="business-units">
+    <h2>Business Units</h2>
+    <div class="card-grid">
+        {% for unit in summary.business_units %}
+        <a class="card" href="/business/{{ unit.slug }}">
+            <div class="card-header">
+                <span class="card-name">{{ unit.name }}</span>
+                <span class="status-dot status-{{ unit.health }}" title="Salud: {{ unit.health }}"></span>
+            </div>
+            <div class="card-row"><span class="label">Estado</span><span>{{ unit.status }}</span></div>
+            <div class="card-row"><span class="label">Salud</span><span class="health-{{ unit.health }}">{{ unit.health }}</span></div>
+            <div class="card-row"><span class="label">Misiones activas</span><span>{{ unit.active_missions }}</span></div>
+            <div class="card-row"><span class="label">Próxima decisión</span><span>{{ unit.next_decision or "—" }}</span></div>
+        </a>
+        {% else %}
+        <p>No hay business units registradas.</p>
+        {% endfor %}
+    </div>
+</section>
+
+<section id="eventos" hx-get="/api/events" hx-trigger="every 30s" hx-swap="none">
+    <h2>Eventos recientes</h2>
+    <table class="events-table">
+        <thead>
+            <tr><th>Fecha</th><th>Tipo</th><th>Business Unit</th><th>Mensaje</th><th>Autor</th></tr>
+        </thead>
+        <tbody>
+            {% for event in summary.recent_events %}
+            <tr>
+                <td>{{ event.fecha }}</td>
+                <td>{{ event.tipo }}</td>
+                <td>{{ event.business_unit }}</td>
+                <td>{{ event.mensaje }}</td>
+                <td>{{ event.autor }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5">No hay eventos registrados todavía.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endblock %}

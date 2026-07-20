@@ -39,3 +39,6 @@ env/
 .ruff_cache/
 .coverage
 htmlcov/
+
+# The Window — runtime SQLite database (regenerated automatically on startup)
+workspace/events.db

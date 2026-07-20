@@ -1,0 +1,12 @@
+name: CASINO
+status: paused
+health: red
+objective: Resolver bloqueo regulatorio antes de reanudar operación.
+missions: []
+business:
+  stage: blocked
+  revenue_status: detenido
+events: []
+decisions:
+- Decidir si se continúa o se cierra la unidad
+opportunities: []

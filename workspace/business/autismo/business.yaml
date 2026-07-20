@@ -1,0 +1,13 @@
+name: AUTISMO
+status: active
+health: green
+objective: Ampliar cobertura del programa actual.
+missions:
+- Capacitar nuevo equipo terapéutico
+business:
+  stage: growth
+  revenue_status: estable
+events: []
+decisions: []
+opportunities:
+- Convenio con nueva institución educativa
