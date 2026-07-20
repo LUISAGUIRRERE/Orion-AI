@@ -4,7 +4,7 @@
 |---|---|
 | Document type | Operational protocol (new capability) |
 | Status | Active |
-| Version | 1.0.0 |
+| Version | 1.1.0 |
 | Layered on | `.ai/DECISION_PROCESS.md` (authoritative governance paths), `.ai/HANDOFF_TEMPLATE.md`, `.orion/TEAM.md` (role mapping) |
 | Does not replace | `.ai/BOARD.md`, `.ai/ROLES.md`, `.ai/DECISION_PROCESS.md` |
 
@@ -25,9 +25,12 @@ Agents do not coordinate through free-form conversation. They coordinate through
 | GitHub Issue | Product Owner (or any role, approved by Product Owner) | Builder | `CONTRIBUTING.md` |
 | Design discussion / Research findings | CTO, Architect, or Research | Architect, Product Owner | Captured inline in the Issue or folded into an ADR's Context |
 | Architecture Decision Record (ADR) | CTO or Architect | Reviewer, Product Owner (ratifies) | `docs/DECISIONS.md` |
+| Mission | Architect or Product Owner | Builder | [`.orion/missions/README.md`](.orion/missions/README.md) and `MISSION_TEMPLATE.md` |
 | Pull Request | Builder | Reviewer, GitOps | `.github/PULL_REQUEST_TEMPLATE.md` |
 | Handoff Record | Any role transferring work | Receiving role | `.ai/HANDOFF_TEMPLATE.md` |
 | Retrospective Note | Documentation (or whoever closes the work) | All roles | New under this protocol — filed as a comment on the closing Issue/PR, or as a `docs/DECISIONS.md` entry when it produces a process change |
+
+No implementation work is consumed by a Builder without a Mission. A Mission's lifecycle (Draft → Approved → In Progress → Review → Blocked → Completed → Merged → Archived, defined in `.orion/missions/README.md`) is a justified specialization of the generic approval flow in §6 below: unlike other artifacts, a Mission represents ongoing execution, not a single approval event, so it needs states none of the others do.
 
 ## 2. Inputs
 
@@ -91,3 +94,4 @@ Every escalation goes to Luis, per `.ai/DECISION_PROCESS.md`. His resolution is 
 | Version | Date | Change | Approved by |
 |---|---|---|---|
 | 1.0.0 | 2026-07-17 | Initial protocol, layered on existing `.ai/DECISION_PROCESS.md` governance paths | Luis Aguirre |
+| 1.1.0 | 2026-07-17 | Added Mission as a new artifact type. Part of MISSION-0001 (ADR-0005). | Luis Aguirre |

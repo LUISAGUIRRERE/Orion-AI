@@ -49,6 +49,8 @@ Any change to architecture, product vision, governance rules, or any item listed
 ```
 Issue approved
   ↓
+Mission approved
+  ↓
 Jules
   ↓
 Nemotron
@@ -58,7 +60,7 @@ Luis
 Merge
 ```
 
-Any change to application code. Implementation never begins without an approved GitHub Issue.
+Any change to application code. Implementation never begins without an approved GitHub Issue, and never begins without an Approved Mission defining exactly what may be created or modified. See [`.orion/missions/README.md`](../.orion/missions/README.md) for how a Mission is authored and approved.
 
 ## Escalation
 
