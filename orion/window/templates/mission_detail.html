@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block content %}
+<a href="/missions" class="back-link">&larr; Volver a Misiones</a>
+
+<section id="mission-detail">
+    <div class="card-header">
+        <h1>{{ mission.id }} — {{ mission.title }}</h1>
+    </div>
+
+    <h2>Información general</h2>
+    <div class="card-row"><span class="label">Estado</span><span>{{ mission.status.value }}</span></div>
+    <div class="card-row"><span class="label">Responsable</span><span>{{ mission.owner or "—" }}</span></div>
+    <div class="card-row"><span class="label">Business Unit</span><span>{{ mission.business_unit or "—" }}</span></div>
+    <div class="card-row"><span class="label">Prioridad</span><span>{{ mission.priority }}</span></div>
+    <div class="card-row"><span class="label">Rol asignado</span><span>{{ mission.assigned_role or "—" }}</span></div>
+    <div class="card-row"><span class="label">Descripción</span><span>{{ mission.description or "—" }}</span></div>
+    <div class="card-row"><span class="label">Creada</span><span>{{ mission.created_at }}</span></div>
+    <div class="card-row"><span class="label">Actualizada</span><span>{{ mission.updated_at }}</span></div>
+    <div class="card-row"><span class="label">Iniciada</span><span>{{ mission.started_at or "—" }}</span></div>
+    <div class="card-row"><span class="label">Finalizada</span><span>{{ mission.finished_at or "—" }}</span></div>
+    <div class="card-row"><span class="label">Tags</span><span>{{ mission.tags | join(", ") if mission.tags else "—" }}</span></div>
+
+    <h2>Timeline</h2>
+    <table class="events-table">
+        <thead>
+            <tr><th>Fecha</th><th>Tipo</th><th>Mensaje</th><th>Autor</th></tr>
+        </thead>
+        <tbody>
+            {% for event in events %}
+            <tr>
+                <td>{{ event.timestamp }}</td>
+                <td>{{ event.type }}</td>
+                <td>{{ event.message }}</td>
+                <td>{{ event.author }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="4">Sin eventos todavía.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <h2>Mensajes</h2>
+    <table class="events-table">
+        <thead>
+            <tr><th>Fecha</th><th>De</th><th>Para</th><th>Mensaje</th></tr>
+        </thead>
+        <tbody>
+            {% for msg in messages %}
+            <tr>
+                <td>{{ msg.created_at }}</td>
+                <td>{{ msg.sender }}</td>
+                <td>{{ msg.receiver }}</td>
+                <td>{{ msg.message }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="4">Sin mensajes todavía.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endblock %}

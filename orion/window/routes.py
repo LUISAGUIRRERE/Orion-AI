@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
+from orion.bridge import services as bridge_services
 from orion.window import services
 from orion.window.models import BusinessUnit, DashboardSummary, Event
 
@@ -32,7 +33,8 @@ def _topbar_context() -> dict[str, str | int]:
 async def dashboard_page(request: Request) -> HTMLResponse:
     """Render the main dashboard: business unit cards and recent events."""
     summary = services.get_dashboard_summary()
-    context = {"summary": summary, **_topbar_context()}
+    mission_summary = bridge_services.get_mission_summary()
+    context = {"summary": summary, "mission_summary": mission_summary, **_topbar_context()}
     return templates.TemplateResponse(request, "index.html", context)
 
 
@@ -44,6 +46,29 @@ async def business_detail_page(request: Request, slug: str) -> HTMLResponse:
         raise HTTPException(status_code=404, detail=f"Business unit '{slug}' not found")
     context = {"unit": unit, **_topbar_context()}
     return templates.TemplateResponse(request, "project.html", context)
+
+
+@pages_router.get("/missions", response_class=HTMLResponse)
+async def missions_page(request: Request) -> HTMLResponse:
+    """Render the list of every mission tracked by the Command Bridge."""
+    missions = bridge_services.list_missions()
+    context = {"missions": missions, **_topbar_context()}
+    return templates.TemplateResponse(request, "missions.html", context)
+
+
+@pages_router.get("/missions/{mission_id}", response_class=HTMLResponse)
+async def mission_detail_page(request: Request, mission_id: str) -> HTMLResponse:
+    """Render a single mission: info, timeline, messages, and events."""
+    mission = bridge_services.get_mission(mission_id)
+    if mission is None:
+        raise HTTPException(status_code=404, detail=f"Mission '{mission_id}' not found")
+    context = {
+        "mission": mission,
+        "events": bridge_services.get_events(mission_id),
+        "messages": bridge_services.get_messages(mission_id),
+        **_topbar_context(),
+    }
+    return templates.TemplateResponse(request, "mission_detail.html", context)
 
 
 @api_router.get("/dashboard", response_model=DashboardSummary)

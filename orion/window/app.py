@@ -14,6 +14,8 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
+from orion.bridge import storage as bridge_storage
+from orion.bridge.routes import router as bridge_api_router
 from orion.window import services
 from orion.window.routes import api_router, pages_router
 
@@ -27,12 +29,16 @@ app.mount(
 
 app.include_router(pages_router)
 app.include_router(api_router)
+app.include_router(bridge_api_router)
 
 
 @app.on_event("startup")
 async def on_startup() -> None:
-    """Ensure the workspace (business units + events database) exists."""
+    """Ensure the workspace (business units, events database, and the
+    Command Bridge's mission storage) exists.
+    """
     services.ensure_workspace()
+    bridge_storage.ensure_bridge_storage()
 
 
 if __name__ == "__main__":
