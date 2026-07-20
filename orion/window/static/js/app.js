@@ -101,3 +101,34 @@
     refresh();
     setInterval(refresh, 10000);
 })();
+
+/**
+ * Poll the Execution Pipeline's status every 10s and refresh the
+ * Execution Pipeline card in place, for the same reason as the two
+ * pollers above: hx-swap="none" polling would fetch but discard the
+ * response. No-op on any page without the card.
+ */
+(function pollExecutionStatus() {
+    const workspaceEl = document.getElementById("pipeline-workspace");
+    if (!workspaceEl) return;
+
+    async function refresh() {
+        try {
+            const res = await fetch("/api/execution/status");
+            if (!res.ok) return;
+            const data = await res.json();
+            document.getElementById("pipeline-workspace").textContent = data.workspace || "\u2014";
+            document.getElementById("pipeline-branch").textContent = data.current_branch;
+            document.getElementById("pipeline-commit").textContent = data.current_commit || "\u2014";
+            document.getElementById("pipeline-validation").textContent = data.validation_status;
+            document.getElementById("pipeline-repo-status").textContent = data.repository_status;
+            document.getElementById("pipeline-last-push").textContent = data.last_push || "\u2014";
+            document.getElementById("pipeline-pr").textContent = data.pull_request || "\u2014";
+        } catch (err) {
+            // Transient network error: the next poll will retry.
+        }
+    }
+
+    refresh();
+    setInterval(refresh, 10000);
+})();

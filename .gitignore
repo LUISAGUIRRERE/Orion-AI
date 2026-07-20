@@ -48,3 +48,14 @@ workspace/builder_state.yaml
 
 # COO Agent — runtime status file (regenerated automatically)
 workspace/coo_state.yaml
+
+# Execution Pipeline — runtime status file (regenerated automatically)
+workspace/execution_state.yaml
+
+# Command Bridge — Mission Framework's own live operational data (mission.yaml, messages.yaml, events.yaml, the shared queue file).
+# This is ORION's runtime database, not source content: a mission's
+# own git commit (see orion/execution/git_manager.py commit()) only
+# ever adds the specific deliverable files a handler produced, never
+# this directory. Ignored here too as a safety net against `git add -A`
+# sweeping test or in-flight mission data into an unrelated commit.
+workspace/missions/

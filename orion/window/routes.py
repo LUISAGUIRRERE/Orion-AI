@@ -12,6 +12,7 @@ from orion.agents.builder import agent as builder_agent
 from orion.agents.coo import agent as coo_agent
 from orion.agents.coo import metrics as coo_metrics
 from orion.bridge import services as bridge_services
+from orion.execution import pipeline as execution_pipeline
 from orion.window import services
 from orion.window.models import BusinessUnit, DashboardSummary, Event
 
@@ -40,12 +41,14 @@ async def dashboard_page(request: Request) -> HTMLResponse:
     builder_state = builder_agent.get_state()
     coo_state = coo_agent.get_state()
     coo_metrics_data = coo_metrics.compute()
+    execution_state = execution_pipeline.get_state()
     context = {
         "summary": summary,
         "mission_summary": mission_summary,
         "builder_state": builder_state,
         "coo_state": coo_state,
         "coo_metrics": coo_metrics_data,
+        "execution_state": execution_state,
         **_topbar_context(),
     }
     return templates.TemplateResponse(request, "index.html", context)
