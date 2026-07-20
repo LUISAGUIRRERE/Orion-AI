@@ -27,6 +27,7 @@ from orion.bridge import services as bridge_services
 from orion.bridge import storage as bridge_storage
 from orion.bridge.models import Mission, MissionStatus
 from orion.execution import pipeline as execution_pipeline
+from orion.experience import services as experience_services
 from orion.prompt_composer import services as prompt_composer_services
 
 AUTHOR = "Builder"
@@ -100,6 +101,21 @@ def _find_next_ready_mission() -> Mission | None:
     return None
 
 
+def _record_experience_safely(mission_id: str) -> None:
+    """Generate this mission's Experience Report, never letting a
+    failure here affect the mission's own terminal status -- the same
+    defensive pattern already used for orion.prompt_composer above.
+    Looked up fresh (not passed the in-memory Mission) so this always
+    reflects the mission's final, persisted state."""
+    mission = bridge_services.get_mission(mission_id)
+    if mission is None:
+        return
+    try:
+        experience_services.record_experience(mission)
+    except Exception as exc:  # noqa: BLE001 - recording experience must never crash the agent
+        bridge_services.record_event(mission_id, "experience_generation_failed", str(exc), AUTHOR)
+
+
 def process_next() -> Mission | None:
     """Process exactly one READY mission end to end.
 
@@ -170,6 +186,7 @@ def process_next() -> Mission | None:
         state.current_project_id = None
         state.touch()
         _save_state(state)
+        _record_experience_safely(mission.id)
         return bridge_services.get_mission(mission.id)
 
     if not pipeline_result.success:
@@ -182,6 +199,7 @@ def process_next() -> Mission | None:
         state.current_project_id = None
         state.touch()
         _save_state(state)
+        _record_experience_safely(mission.id)
         return bridge_services.get_mission(mission.id)
 
     result = pipeline_result.handler_result
@@ -206,4 +224,5 @@ def process_next() -> Mission | None:
     state.touch()
     _save_state(state)
 
+    _record_experience_safely(mission.id)
     return bridge_services.get_mission(mission.id)
