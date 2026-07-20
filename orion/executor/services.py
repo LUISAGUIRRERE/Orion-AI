@@ -190,6 +190,15 @@ def run_for_mission(mission: Mission, repo_root: Path) -> tuple[list[str], str]:
     written: list[str] = []
     for artifact in result.artifacts:
         target = repo_root / artifact.path
+        if artifact.change_type == "deleted":
+            # BETA 006 (Claude Code Live Invocation): a real adapter
+            # can observe a provider deleting a file in its workspace,
+            # not just creating/modifying one. GitManager still owns
+            # every git operation -- this is a plain filesystem
+            # unlink, exactly as unremarkable as the write below.
+            target.unlink(missing_ok=True)
+            written.append(artifact.path)
+            continue
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(artifact.content, encoding="utf-8")
         written.append(artifact.path)
