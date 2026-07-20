@@ -26,6 +26,20 @@
     </div>
 </section>
 
+<section id="misiones">
+    <h2>Misiones</h2>
+    <div class="card-grid">
+        <div class="card">
+            <div class="card-row"><span class="label">Pendientes</span><span>{{ mission_summary.pendientes }}</span></div>
+            <div class="card-row"><span class="label">En ejecución</span><span>{{ mission_summary.en_ejecucion }}</span></div>
+            <div class="card-row"><span class="label">Esperando</span><span>{{ mission_summary.esperando }}</span></div>
+            <div class="card-row"><span class="label">Terminadas</span><span>{{ mission_summary.terminadas }}</span></div>
+            <div class="card-row"><span class="label">Bloqueadas</span><span>{{ mission_summary.bloqueadas }}</span></div>
+        </div>
+    </div>
+    <a class="back-link" href="/missions">Ver todas las misiones &rarr;</a>
+</section>
+
 <section id="eventos" hx-get="/api/events" hx-trigger="every 30s" hx-swap="none">
     <h2>Eventos recientes</h2>
     <table class="events-table">

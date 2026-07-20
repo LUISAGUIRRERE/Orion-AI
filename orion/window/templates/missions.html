@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section id="missions-list">
+    <h1>Misiones</h1>
+    <table class="events-table">
+        <thead>
+            <tr>
+                <th>ID</th><th>Título</th><th>Estado</th><th>Business Unit</th>
+                <th>Responsable</th><th>Prioridad</th><th>Actualizada</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for mission in missions %}
+            <tr onclick="window.location='/missions/{{ mission.id }}'" style="cursor:pointer;">
+                <td>{{ mission.id }}</td>
+                <td>{{ mission.title }}</td>
+                <td>{{ mission.status.value }}</td>
+                <td>{{ mission.business_unit or "—" }}</td>
+                <td>{{ mission.owner or "—" }}</td>
+                <td>{{ mission.priority }}</td>
+                <td>{{ mission.updated_at }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="7">No hay misiones registradas todavía.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endblock %}
