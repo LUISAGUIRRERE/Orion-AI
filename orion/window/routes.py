@@ -14,6 +14,7 @@ from orion.agents.coo import metrics as coo_metrics
 from orion.bridge import services as bridge_services
 from orion.execution import pipeline as execution_pipeline
 from orion.experience import knowledge_store, storage as experience_storage
+from orion.business import services as business_services
 from orion.intelligence import services as intelligence_services
 from orion.projects import registry as project_registry
 from orion.projects import services as project_services
@@ -278,3 +279,40 @@ async def intelligence_knowledge_graph_page(request: Request) -> HTMLResponse:
         **_topbar_context(),
     }
     return templates.TemplateResponse(request, "intelligence_knowledge_graph.html", context)
+
+
+# ---------------------------------------------------------------------------
+# BETA 009: Business Brain pages. /companies (not /business, which
+# Sprint 004's BusinessUnit pages already own) -- one list page plus
+# one rich per-company Dashboard covering every section this Sprint
+# asks for (Proyectos/Objetivos/Roadmap/Branding/Documentos/
+# Decisiones/Conocimiento) in a single page, matching the spec's own
+# "cada empresa tendra su propio Dashboard".
+# ---------------------------------------------------------------------------
+
+
+@pages_router.get("/companies", response_class=HTMLResponse)
+async def companies_page(request: Request) -> HTMLResponse:
+    companies = business_services.list_companies()
+    context = {"companies": companies, **_topbar_context()}
+    return templates.TemplateResponse(request, "companies.html", context)
+
+
+@pages_router.get("/companies/{company_id}", response_class=HTMLResponse)
+async def company_dashboard_page(request: Request, company_id: str) -> HTMLResponse:
+    company = business_services.get_company(company_id)
+    if company is None:
+        raise HTTPException(status_code=404, detail=f"Empresa '{company_id}' no encontrada.")
+    context = {
+        "company": company,
+        "projects": business_services.list_projects(company_id),
+        "brand": business_services.get_brand(company_id),
+        "goals": business_services.list_goals(company_id),
+        "roadmap": business_services.list_roadmap(company_id),
+        "documents": business_services.list_documents(company_id),
+        "decisions": business_services.list_decisions(company_id),
+        "knowledge": business_services.list_knowledge(company_id),
+        "memory": business_services.recall_memory(company_id),
+        **_topbar_context(),
+    }
+    return templates.TemplateResponse(request, "company_dashboard.html", context)

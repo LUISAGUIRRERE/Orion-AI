@@ -29,6 +29,7 @@ import yaml
 from orion.bridge import services as bridge_services
 from orion.bridge import storage as bridge_storage
 from orion.bridge.models import Mission, MissionStatus
+from orion.business import services as business_services
 from orion.execution import pipeline as execution_pipeline
 from orion.experience import services as experience_services
 from orion.intelligence import services as intelligence_services
@@ -174,6 +175,15 @@ def _record_experience_safely(mission_id: str) -> None:
     except Exception as exc:  # noqa: BLE001 - knowledge recording must never crash the agent
         bridge_services.record_event(mission_id, "knowledge_recording_failed", str(exc), AUTHOR)
 
+    # BETA 009: "cada Mission completada debe actualizar Knowledge,
+    # Roadmap, Goals" -- real, conservative learning (see
+    # business_services.learn_from_mission's own docstring for why
+    # this deliberately never auto-writes a Decision Log entry).
+    try:
+        business_services.learn_from_mission(mission.id, mission.title, mission.description)
+    except Exception as exc:  # noqa: BLE001 - business learning must never crash the agent
+        bridge_services.record_event(mission_id, "business_learning_failed", str(exc), AUTHOR)
+
 
 # BETA 007 (Runtime): process_next() used to have exactly one caller
 # at a time by construction (a single COO/Builder cycle). The Runtime
@@ -282,26 +292,40 @@ def run_claimed_mission(mission: Mission) -> Mission | None:
     except Exception as exc:  # noqa: BLE001 - composing context must never crash the agent
         bridge_services.record_event(mission.id, "prompt_composer_failed", str(exc), AUTHOR)
 
-    # BETA 008: real Project Intelligence pass before the Executor runs
-    # a single line -- reuse-candidate search, a rule-based Plan, and a
-    # real pre-modification Impact Analysis against this mission's own
-    # request text (mission.description/mission.title), exactly the
-    # "understand before you write code" step the Sprint asks for.
-    # Deliberately informational, same as the Reviewer hook in
-    # orion.execution.pipeline: it records real, non-fabricated
-    # findings on the mission timeline, but a failure here (e.g. an
-    # unreadable repo, or a project with no local checkout yet) must
-    # never block or fail a mission whose actual work has not even
-    # started yet.
+    # BETA 009: Business Brain -> Context Engine -> Project Intelligence,
+    # in exactly that order (this Sprint's own Mission Flow). Real,
+    # deterministic company/project resolution from the mission's own
+    # text -- never asked for, never guessed by an LLM. When it
+    # resolves, resolve_context() has *already* called into
+    # orion.intelligence.services itself for the resolved technical
+    # project (never a second, duplicate analysis here -- "no duplicar
+    # Project Intelligence"). Deliberately informational either way,
+    # same as every other BETA 008 hook in this function: a failure
+    # here must never block or fail a mission whose actual work has
+    # not even started yet.
+    business_brief = None
     try:
-        brief = intelligence_services.prepare_request(
-            mission.description or mission.title,
-            project_key=mission.project_id or "",
-            mission_id=mission.id,
-        )
-        bridge_services.record_event(mission.id, "intelligence_brief", brief.summary_text(), AUTHOR)
-    except Exception as exc:  # noqa: BLE001 - analysis must never crash or block the agent
-        bridge_services.record_event(mission.id, "intelligence_failed", str(exc), AUTHOR)
+        business_brief = business_services.resolve_context(mission.description or mission.title, mission_id=mission.id)
+        bridge_services.record_event(mission.id, "business_context_loaded", business_brief.summary_text(), AUTHOR)
+    except Exception as exc:  # noqa: BLE001 - resolution must never crash or block the agent
+        bridge_services.record_event(mission.id, "business_context_failed", str(exc), AUTHOR)
+
+    if business_brief is None or not business_brief.resolved.resolved:
+        # No real Company matched this request (or resolution itself
+        # errored) -- fall back to BETA 008's own direct Project
+        # Intelligence pass, unchanged, so missions unrelated to any
+        # registered business (including ORION-AI's own missions, and
+        # every existing BETA 007/008 test) keep their exact prior
+        # behavior.
+        try:
+            brief = intelligence_services.prepare_request(
+                mission.description or mission.title,
+                project_key=mission.project_id or "",
+                mission_id=mission.id,
+            )
+            bridge_services.record_event(mission.id, "intelligence_brief", brief.summary_text(), AUTHOR)
+        except Exception as exc:  # noqa: BLE001 - analysis must never crash or block the agent
+            bridge_services.record_event(mission.id, "intelligence_failed", str(exc), AUTHOR)
 
     try:
         pipeline_result = execution_pipeline.run(mission)
