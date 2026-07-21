@@ -16,15 +16,11 @@ Run with:
 
 from __future__ import annotations
 
-import importlib
-import os
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
-
-import yaml
 
 from orion.board import canonical, generator
 from orion.board.canonical import BoardConfigurationError, load_board_config, parse_and_validate
@@ -146,6 +142,72 @@ class CanonicalLoaderTests(unittest.TestCase):
         config = parse_and_validate(_config([dict(VALID_MINIMAL_MEMBER, display_name="Jules", role="Lead Software Engineer")]))
         self.assertEqual(config.get("x").seat_label(), "Jules (Lead Software Engineer)")
 
+    # --- G-012 REMEDIATION (HIGH #4) hardening -------------------------
+
+    def test_boolean_schema_version_rejected(self) -> None:
+        """bool is a subclass of int in Python -- isinstance(True, int)
+        is True. schema_version: true must be rejected explicitly, not
+        silently accepted as version 1 (it would compare equal to 1)."""
+        with self.assertRaises(BoardConfigurationError):
+            parse_and_validate(_config([VALID_MINIMAL_MEMBER], schema_version=True))
+
+    def test_boolean_board_version_rejected(self) -> None:
+        with self.assertRaises(BoardConfigurationError):
+            parse_and_validate(_config([VALID_MINIMAL_MEMBER], board_version=False))
+
+    def test_non_string_id_rejected(self) -> None:
+        bad = dict(VALID_MINIMAL_MEMBER, id=42)
+        with self.assertRaises(BoardConfigurationError):
+            parse_and_validate(_config([bad]))
+
+    def test_non_string_display_name_rejected(self) -> None:
+        bad = dict(VALID_MINIMAL_MEMBER, display_name=["not", "a", "string"])
+        with self.assertRaises(BoardConfigurationError):
+            parse_and_validate(_config([bad]))
+
+    def test_non_string_role_rejected(self) -> None:
+        bad = dict(VALID_MINIMAL_MEMBER, role=123)
+        with self.assertRaises(BoardConfigurationError):
+            parse_and_validate(_config([bad]))
+
+    def test_unknown_top_level_key_rejected(self) -> None:
+        data = _config([VALID_MINIMAL_MEMBER])
+        data["unexpected_extra_key"] = "surprise"
+        with self.assertRaises(BoardConfigurationError):
+            parse_and_validate(data)
+
+    def test_unknown_member_key_rejected(self) -> None:
+        bad = dict(VALID_MINIMAL_MEMBER, unexpected_field="surprise")
+        with self.assertRaises(BoardConfigurationError):
+            parse_and_validate(_config([bad]))
+
+    def test_absolute_documentation_path_rejected(self) -> None:
+        bad = dict(VALID_MINIMAL_MEMBER, documentation_path="/etc/passwd")
+        with self.assertRaises(BoardConfigurationError):
+            parse_and_validate(_config([bad]), repo_root=REPO_ROOT)
+
+    def test_path_traversal_in_documentation_path_rejected(self) -> None:
+        bad = dict(VALID_MINIMAL_MEMBER, documentation_path="../../../../etc/passwd")
+        with self.assertRaises(BoardConfigurationError):
+            parse_and_validate(_config([bad]), repo_root=REPO_ROOT)
+
+    def test_traversal_that_stays_inside_repo_root_but_looks_suspicious_is_still_checked_for_existence(self) -> None:
+        # ".." that resolves back inside the repo is not a traversal
+        # *escape*, but the resulting path must still actually exist.
+        bad = dict(VALID_MINIMAL_MEMBER, documentation_path="agents/../agents/does-not-exist.md")
+        with self.assertRaises(BoardConfigurationError):
+            parse_and_validate(_config([bad]), repo_root=REPO_ROOT)
+
+    def test_self_supersede_rejected(self) -> None:
+        bad = dict(VALID_MINIMAL_MEMBER, supersedes="x")
+        with self.assertRaises(BoardConfigurationError):
+            parse_and_validate(_config([bad]))
+
+    def test_non_string_supersedes_rejected(self) -> None:
+        bad = dict(VALID_MINIMAL_MEMBER, supersedes=123)
+        with self.assertRaises(BoardConfigurationError):
+            parse_and_validate(_config([bad]))
+
 
 class MemberRegistryIntegrationTests(unittest.TestCase):
     """orion.board.member_registry must derive board_seat from the
@@ -171,49 +233,119 @@ class MemberRegistryIntegrationTests(unittest.TestCase):
         expected_architect = f"{config.get('chatgpt').seat_label()} / {config.get('claude').seat_label()}"
         self.assertEqual(member_registry.get_member("architect").board_seat, expected_architect)
 
+    def test_every_pipeline_stage_seat_reference_resolves_in_canonical_source(self) -> None:
+        """Consistency check between the two, deliberately-separated
+        layers Codex asked for: B-011's static pipeline templates
+        (board_seat_member_ids) and G-012's canonical roster
+        (.ai/board.yaml). Every id a pipeline stage references must
+        actually exist as a real member -- otherwise every call would
+        silently resolve to an 'unavailable' error state instead of a
+        real label."""
+        from orion.board.member_registry import MEMBERS
+
+        config = load_board_config()
+        known_ids = {m.id for m in config.members}
+        for key, template in MEMBERS.items():
+            for member_id in template.board_seat_member_ids:
+                self.assertIn(member_id, known_ids, f"{key} references unknown canonical id '{member_id}'")
+
     def test_qa_and_experience_have_no_board_seat_regression(self) -> None:
         from orion.board import member_registry
 
         self.assertIsNone(member_registry.get_member("qa").board_seat)
         self.assertIsNone(member_registry.get_member("experience").board_seat)
 
-    def test_falls_back_gracefully_when_canonical_load_fails(self) -> None:
-        """A broken/missing .ai/board.yaml must never break every
-        consumer of orion.board.member_registry (Governance, Runtime,
-        CLI, API, Window) -- only `orion board validate` should ever
-        surface that as a real error."""
-        original_loader = canonical.load_board_config
-        canonical.load_board_config = lambda *a, **kw: (_ for _ in ()).throw(
-            BoardConfigurationError("simulated corrupt board.yaml")
-        )
-        try:
-            import orion.board.member_registry as mr
-
-            importlib.reload(mr)
-            self.assertIsNone(mr._CANONICAL_BOARD)
-            self.assertEqual(mr.get_member("builder").board_seat, "Jules (Lead Software Engineer)")
-            self.assertEqual(mr.get_member("qa").board_seat, None)
-        finally:
-            canonical.load_board_config = original_loader
-            import orion.board.member_registry as mr
-
-            importlib.reload(mr)  # restore the real, working state for every later test
-
-    def test_reloading_with_real_canonical_source_matches_original_values(self) -> None:
-        """Regression: after the fallback test above reloads the
-        module with a broken loader and then restores it, the real
-        values must come back byte-identical to what B-011 originally
-        hardcoded."""
+    def test_no_import_time_snapshot_exists(self) -> None:
+        """G-012 REMEDIATION (HIGH #2): there must be no module-level
+        cache resolved once at import time. Reloading the module twice
+        in a row must not require any special reset step -- there is
+        nothing cached to reset."""
         import orion.board.member_registry as mr
 
-        importlib.reload(mr)
-        self.assertEqual(mr.get_member("builder").board_seat, "Jules (Lead Software Engineer)")
-        self.assertEqual(mr.get_member("reviewer").board_seat, "Nemotron (Principal Engineering Reviewer)")
-        self.assertEqual(mr.get_member("gitops").board_seat, "AutoClaw (Operations Engineer)")
-        self.assertEqual(
-            mr.get_member("architect").board_seat,
-            "ChatGPT (Chief AI Architect) / Claude (Chief Software Architect)",
+        self.assertFalse(hasattr(mr, "_CANONICAL_BOARD"), "no import-time snapshot may exist")
+
+    def test_resolution_failure_never_fabricates_an_identity(self) -> None:
+        """G-012 REMEDIATION (HIGH #1): when board.yaml cannot be
+        loaded, board_seat must be None and board_seat_error must hold
+        the real error -- never a hardcoded name/role standing in for
+        real data."""
+        original_loader = canonical.load_board_config
+
+        def _boom(*a, **kw):
+            raise BoardConfigurationError("simulated corrupt board.yaml")
+
+        canonical.load_board_config = _boom
+        try:
+            from orion.board import member_registry as mr
+
+            builder = mr.get_member("builder")
+            self.assertIsNone(builder.board_seat)
+            self.assertIn("simulated corrupt board.yaml", builder.board_seat_error)
+
+            architect = mr.get_member("architect")
+            self.assertIsNone(architect.board_seat)
+            self.assertIn("simulated corrupt board.yaml", architect.board_seat_error)
+
+            # QA/Experience have no dedicated seat by design -- this is
+            # NOT a resolution failure, so no error should be reported.
+            qa = mr.get_member("qa")
+            self.assertIsNone(qa.board_seat)
+            self.assertIsNone(qa.board_seat_error)
+        finally:
+            canonical.load_board_config = original_loader
+
+    def test_resolution_reflects_current_file_state_every_call_no_caching(self) -> None:
+        """G-012 REMEDIATION (HIGH #2): two consecutive calls must each
+        independently query the canonical source -- proven by swapping
+        the loader between calls and observing the change take effect
+        immediately, with no stale value surviving from the first
+        call."""
+        from orion.board import member_registry as mr
+
+        original_loader = canonical.load_board_config
+
+        # First call: real config, seat should resolve normally.
+        self.assertIsNotNone(mr.get_member("builder").board_seat)
+
+        # Second call: loader now fails -- must be reflected immediately.
+        canonical.load_board_config = lambda *a, **kw: (_ for _ in ()).throw(
+            BoardConfigurationError("swapped mid-run")
         )
+        try:
+            broken = mr.get_member("builder")
+            self.assertIsNone(broken.board_seat)
+            self.assertIn("swapped mid-run", broken.board_seat_error)
+        finally:
+            canonical.load_board_config = original_loader
+
+        # Third call: loader restored -- must resolve again immediately.
+        restored = mr.get_member("builder")
+        self.assertEqual(restored.board_seat, "Jules (Lead Software Engineer)")
+        self.assertIsNone(restored.board_seat_error)
+
+    def test_real_values_match_canonical_after_all_the_above(self) -> None:
+        """Regression: after the failure-simulation tests above swap
+        and restore the loader, the real values must still come back
+        exactly matching .ai/board.yaml's own seat_label() output."""
+        from orion.board import member_registry as mr
+
+        config = load_board_config()
+        self.assertEqual(mr.get_member("builder").board_seat, config.get("jules").seat_label())
+        self.assertEqual(mr.get_member("reviewer").board_seat, config.get("nemotron").seat_label())
+        self.assertEqual(mr.get_member("gitops").board_seat, config.get("autoclaw").seat_label())
+        expected_architect = f"{config.get('chatgpt').seat_label()} / {config.get('claude').seat_label()}"
+        self.assertEqual(mr.get_member("architect").board_seat, expected_architect)
+
+    def test_members_dict_holds_static_templates_not_resolved_seats(self) -> None:
+        """MEMBERS (the backward-compatible dict) must hold the static
+        pipeline templates -- never a resolved, potentially-stale
+        board_seat. Only get_member()/list_members() resolve seats,
+        and only fresh, every call."""
+        from orion.board.member_registry import MEMBERS
+
+        for key, template in MEMBERS.items():
+            self.assertIsNone(template.board_seat, f"MEMBERS['{key}'] must not hold a resolved seat")
+            self.assertIsNone(template.board_seat_error)
 
 
 class GeneratorTests(unittest.TestCase):
@@ -288,6 +420,54 @@ class GeneratorTests(unittest.TestCase):
         self._tmp_agents.unlink()
         with self.assertRaises(generator.GeneratorError):
             generator.check_drift()
+
+    def test_write_is_atomic_no_leftover_temp_files(self) -> None:
+        """G-012 REMEDIATION (HIGH #3): writes go through a temp file
+        in the same directory + os.replace(); no stray .tmp file may
+        remain after a successful generate()."""
+        corrupted = self._tmp_agents.read_text(encoding="utf-8").replace("Jules", "SOMEONE ELSE")
+        self._tmp_agents.write_text(corrupted, encoding="utf-8")
+
+        generator.generate()
+
+        siblings = list(self._tmp_agents.parent.iterdir())
+        leftover_temp_files = [p for p in siblings if p.name.startswith(f".{self._tmp_agents.name}.") and p.name.endswith(".tmp")]
+        self.assertEqual(leftover_temp_files, [], leftover_temp_files)
+
+    def test_generated_table_escapes_pipe_and_newline_in_member_fields(self) -> None:
+        """G-012 REMEDIATION (HIGH #4): a display_name/role/
+        responsibility containing a literal '|' or a newline must not
+        be able to corrupt the generated Markdown table's structure."""
+        from orion.board.canonical import BoardConfiguration, CanonicalBoardMember
+
+        member = CanonicalBoardMember(
+            id="x",
+            display_name="Weird | Name",
+            role="Ro|le\nwith a newline",
+            status="active",
+            responsibilities=("Resp | onsibility",),
+            restrictions=(),
+            capabilities=(),
+            documentation_path=None,
+            supersedes=None,
+        )
+        config = BoardConfiguration(schema_version=1, board_version=1, members=(member,))
+
+        table = generator._format_agents_table(config)
+        data_rows = [
+            line for line in table.splitlines()
+            if line.startswith("|") and "Weird" in line
+        ]
+        self.assertEqual(len(data_rows), 1)
+        row = data_rows[0]
+        # Exactly 4 real (unescaped) cell-separator pipes plus the two
+        # bounding pipes = 5 total '|' characters that are NOT preceded
+        # by a backslash; every other '|' must be escaped.
+        unescaped_pipes = sum(
+            1 for i, ch in enumerate(row) if ch == "|" and (i == 0 or row[i - 1] != "\\")
+        )
+        self.assertEqual(unescaped_pipes, 5, row)
+        self.assertNotIn("\n", row)
 
 
 class CLITests(unittest.TestCase):
