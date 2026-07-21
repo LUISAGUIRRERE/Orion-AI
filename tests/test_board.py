@@ -351,7 +351,20 @@ class RuntimeIntegrationTests(unittest.TestCase):
     every Mission (regardless of whether Governance hard-stops it),
     reusing Governance's own category rather than re-classifying --
     "no duplicar Governance" verified against the real Mission Flow,
-    not just in isolation."""
+    not just in isolation.
+
+    Real, found-the-hard-way hazard fixed here: the "ordinary mission"
+    test below is deliberately a Bug Fix (LOW risk, no hard_stop), so
+    run_claimed_mission() reaches the real Pipeline, which calls
+    orion.execution.workspace.Workspace.prepare() -- a REAL
+    `git checkout main` against whatever git_manager.REPO_ROOT
+    resolves to. tests/test_business.py::RuntimeIntegrationTests
+    already found and fixed this exact class of bug for its own
+    Pipeline-reaching test; this class repeats that same fix rather
+    than reintroducing the hazard for orion.board's own tests: clone
+    the real repo into a disposable temp directory and point
+    git_manager.REPO_ROOT there for the duration of this class, so
+    these tests never touch the developer's actual working tree."""
 
     def setUp(self) -> None:
         from tests.test_runtime import IsolatedRuntimeTestCase
@@ -375,11 +388,28 @@ class RuntimeIntegrationTests(unittest.TestCase):
         self._orig_board_dir = board_storage.BOARD_DIR
         board_storage.BOARD_DIR = Path(self._board_tmp.name)
 
+        from orion.execution import git_manager
+
+        self._repo_tmp = tempfile.TemporaryDirectory()
+        self._clone_root = Path(self._repo_tmp.name) / "repo"
+        subprocess.run(
+            ["git", "clone", "--quiet", str(REPO_ROOT), str(self._clone_root)], check=True
+        )
+        subprocess.run(["git", "-C", str(self._clone_root), "config", "user.email", "test@orion.local"], check=True)
+        subprocess.run(["git", "-C", str(self._clone_root), "config", "user.name", "Orion Test"], check=True)
+        self._orig_repo_root = git_manager.REPO_ROOT
+        git_manager.REPO_ROOT = self._clone_root
+
         from orion.governance import execution_mode
 
         execution_mode.set_mode(execution_mode.MODE_HARDENING, author="test", reason="board runtime integration test")
 
     def tearDown(self) -> None:
+        from orion.execution import git_manager
+
+        git_manager.REPO_ROOT = self._orig_repo_root
+        self._repo_tmp.cleanup()
+
         board_storage.BOARD_DIR = self._orig_board_dir
         self._board_tmp.cleanup()
 
