@@ -68,6 +68,10 @@ RUNTIME_PATHS: tuple[str, ...] = (
     # omission bit BETA 009 for workspace/business_brain/, which itself
     # repeated BETA 008's original workspace/intelligence/ mistake).
     "workspace/governance/",
+    # B-011 (AI Board Orchestrator): the Board's own per-mission
+    # decided-pipeline records (workspace/board/) -- added proactively
+    # from the start, same reasoning as workspace/governance/ above.
+    "workspace/board/",
 )
 
 

@@ -14,6 +14,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
+from orion.board.routes import router as board_api_router
 from orion.bridge import storage as bridge_storage
 from orion.bridge.routes import router as bridge_api_router
 from orion.business.routes import router as business_api_router
@@ -42,6 +43,7 @@ app.include_router(experience_api_router)
 app.include_router(intelligence_api_router)
 app.include_router(business_api_router)
 app.include_router(governance_api_router)
+app.include_router(board_api_router)
 
 
 @app.on_event("startup")

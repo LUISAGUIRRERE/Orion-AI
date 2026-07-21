@@ -29,6 +29,7 @@ import yaml
 from orion.bridge import services as bridge_services
 from orion.bridge import storage as bridge_storage
 from orion.bridge.models import Mission, MissionStatus
+from orion.board import services as board_services
 from orion.business import services as business_services
 from orion.execution import pipeline as execution_pipeline
 from orion.experience import services as experience_services
@@ -360,6 +361,27 @@ def run_claimed_mission(mission: Mission) -> Mission | None:
     except Exception as exc:  # noqa: BLE001 - a Governance failure must never crash or silently block the agent
         governance_evaluation = None
         bridge_services.record_event(mission.id, "governance_failed", str(exc), AUTHOR)
+
+    # B-011 (AI Board Orchestrator): decides which Board members'
+    # stages this Mission's pipeline goes through and persists that
+    # decision -- purely a coordination/labeling layer, never a second
+    # execution path (see orion.board.board_engine's own docstring).
+    # Reuses -- never recomputes -- Governance's own category when it
+    # is available ("no duplicar Governance"), the same reuse pattern
+    # already applied above for Business Brain's ImpactReport. Runs
+    # regardless of whether Governance's decision is a hard stop: a
+    # Mission waiting on human approval still benefits from having its
+    # intended pipeline already decided and visible. Wrapped so a
+    # Board failure can never crash or block the agent, same as every
+    # other hook in this function.
+    board_category = (
+        governance_evaluation.classification.category if governance_evaluation is not None else None
+    )
+    board_decision = board_services.decide_and_record(
+        mission.id, mission.description or mission.title, category=board_category
+    )
+    if board_decision is None:
+        bridge_services.record_event(mission.id, "board_failed", "No se pudo decidir el pipeline del Board.", AUTHOR)
 
     if governance_evaluation is not None and governance_evaluation.decision.hard_stop:
         # A real, per-change safety signal (Architecture / Breaking

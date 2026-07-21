@@ -9,6 +9,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 from orion.agents.builder import agent as builder_agent
+from orion.board import services as board_services
 from orion.agents.coo import agent as coo_agent
 from orion.agents.coo import metrics as coo_metrics
 from orion.bridge import services as bridge_services
@@ -342,3 +343,18 @@ async def governance_page(request: Request) -> HTMLResponse:
         **_topbar_context(),
     }
     return templates.TemplateResponse(request, "governance.html", context)
+
+
+@pages_router.get("/board", response_class=HTMLResponse)
+async def board_page(request: Request) -> HTMLResponse:
+    decisions = list(reversed(board_services.list_decisions()))[:30]
+    missions_progress = []
+    for decision in decisions:
+        progress = board_services.get_progress(decision.mission_id) or []
+        missions_progress.append({"decision": decision, "progress": progress})
+    context = {
+        "members": board_services.describe_members(),
+        "missions_progress": missions_progress,
+        **_topbar_context(),
+    }
+    return templates.TemplateResponse(request, "board.html", context)

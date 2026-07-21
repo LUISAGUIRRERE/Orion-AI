@@ -498,6 +498,51 @@ def cmd_mode(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_board_members(args: argparse.Namespace) -> int:
+    from orion.board import services as board_services
+
+    for member in board_services.describe_members():
+        seat = member.board_seat or "(sin asiento AI Board dedicado -- compuerta automatica)"
+        print(f"[{member.key:10s}] {member.display_name:10s} -- {seat}")
+        print(f"             implementado por: {member.implemented_by}")
+    return 0
+
+
+def cmd_board_pipeline(args: argparse.Namespace) -> int:
+    from orion.board import services as board_services
+
+    if args.mission_id:
+        decision = board_services.get_decision(args.mission_id)
+        if decision is None:
+            print(f"No hay un pipeline decidido y persistido para la mission '{args.mission_id}'.")
+            return 1
+        print(decision.summary_text())
+        return 0
+
+    if not args.request:
+        print("Se requiere 'request' (texto libre) o --mission-id.")
+        return 1
+    from orion.board.board_engine import decide_pipeline
+
+    pipeline = decide_pipeline(args.request)
+    print(f"(dry-run, no persistido) {pipeline.summary_text()}")
+    return 0
+
+
+def cmd_board_progress(args: argparse.Namespace) -> int:
+    from orion.board import services as board_services
+
+    progress = board_services.get_progress(args.mission_id)
+    if progress is None:
+        print(f"No hay un pipeline decidido y persistido para la mission '{args.mission_id}'.")
+        return 1
+    for stage in progress:
+        seat = stage.board_seat or "(sin asiento dedicado)"
+        marker = "OK" if stage.status == "completed" else ".."
+        print(f"[{marker}] {stage.display_name:10s} ({seat}) -- {stage.status}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="orion", description="ORION CLI (BETA 007 Runtime)")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -621,6 +666,21 @@ def build_parser() -> argparse.ArgumentParser:
     mode_parser.add_argument("--author", default="ORION")
     mode_parser.add_argument("--reason", default=None)
     mode_parser.set_defaults(func=cmd_mode)
+
+    board_parser = subparsers.add_parser("board", help="AI Board Orchestrator (B-011)")
+    board_sub = board_parser.add_subparsers(dest="board_command", required=True)
+
+    board_members_parser = board_sub.add_parser("members", help="List the six Board seats and what implements each")
+    board_members_parser.set_defaults(func=cmd_board_members)
+
+    board_pipeline_parser = board_sub.add_parser("pipeline", help="Show the decided (or a dry-run) pipeline")
+    board_pipeline_parser.add_argument("request", nargs="?", default=None, help="Natural-language request (dry-run)")
+    board_pipeline_parser.add_argument("--mission-id", default=None, help="Show the already-persisted decision for this mission")
+    board_pipeline_parser.set_defaults(func=cmd_board_pipeline)
+
+    board_progress_parser = board_sub.add_parser("progress", help="Show real per-stage progress for a mission")
+    board_progress_parser.add_argument("--mission-id", required=True)
+    board_progress_parser.set_defaults(func=cmd_board_progress)
 
     return parser
 
