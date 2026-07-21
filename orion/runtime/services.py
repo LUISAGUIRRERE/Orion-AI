@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from orion.bridge import services as bridge_services
 from orion.bridge.models import Mission, MissionCreate, MissionStatus
 from orion.executor.registry import get_adapter
+from orion.intelligence import services as intelligence_services
 from orion.runtime import events as runtime_events
 from orion.runtime import queue as runtime_queue
 from orion.runtime import storage as runtime_storage
@@ -74,22 +75,17 @@ def get_scheduler() -> Scheduler | None:
     return _scheduler
 
 
-def ask(request: MissionAskRequest) -> MissionAskResponse:
-    """Mission -> Prompt Composer -> Executor -> Provider -> ...:
-    creates a real Mission (mission_type='executor', the only type the
-    Executor/ProviderAdapter chain understands), marks it READY, and
-    enqueues it on the Runtime's own queue ledger. ask() itself never
-    runs the mission synchronously -- a running Worker (started
-    separately via `orion runtime start`) picks it up on its next
-    poll, exactly like a real queue.
-    """
+def _create_and_enqueue(title: str, description: str, project_id: str, tags: list[str]) -> tuple[Mission, str]:
+    """The exact BETA 007 ask() body, factored out so both the
+    single-mission (default) and auto_plan (BETA 008) paths below
+    share one real creation/enqueue implementation instead of two."""
     mission = bridge_services.create_mission(
         MissionCreate(
-            title=request.title,
-            description=request.description or request.title,
+            title=title,
+            description=description or title,
             mission_type="executor",
-            project_id=request.project_id,
-            tags=request.tags,
+            project_id=project_id,
+            tags=tags,
         ),
         author=AUTHOR,
     )
@@ -106,7 +102,54 @@ def ask(request: MissionAskRequest) -> MissionAskResponse:
     assert updated_mission is not None
     item = runtime_queue.enqueue(mission.id)
     runtime_events.emit(mission.id, "mission_enqueued", "Mision encolada en el Runtime.", AUTHOR)
-    return MissionAskResponse(mission_id=mission.id, status=updated_mission.status.value, queue_status=item.status)
+    return updated_mission, item.status
+
+
+def ask(request: MissionAskRequest) -> MissionAskResponse:
+    """Mission -> Prompt Composer -> Executor -> Provider -> ...:
+    creates a real Mission (mission_type='executor', the only type the
+    Executor/ProviderAdapter chain understands), marks it READY, and
+    enqueues it on the Runtime's own queue ledger. ask() itself never
+    runs the mission synchronously -- a running Worker (started
+    separately via `orion runtime start`) picks it up on its next
+    poll, exactly like a real queue.
+
+    BETA 008: if request.auto_plan is True, the request is first run
+    through the real, rule-based Task Planner (orion.intelligence) and
+    one real Mission is created per plan step, all tagged with the
+    same plan_id so they can be tracked as one unit of work -- exactly
+    the "decompose complex requests into multiple real Missions"
+    behavior the Sprint asks for. Default False keeps this function's
+    external behavior identical to BETA 007 for every existing caller.
+    """
+    if not request.auto_plan:
+        mission, queue_status = _create_and_enqueue(
+            request.title, request.description, request.project_id, request.tags
+        )
+        return MissionAskResponse(mission_id=mission.id, status=mission.status.value, queue_status=queue_status)
+
+    plan = intelligence_services.plan_request(request.description or request.title, project_key=request.project_id)
+    mission_ids: list[str] = []
+    first_mission: Mission | None = None
+    first_queue_status: str | None = None
+    for step in plan.steps:
+        step_tags = list(request.tags) + list(step.tags)
+        mission, queue_status = _create_and_enqueue(
+            f"{request.title} -- {step.title}", step.description, request.project_id, step_tags
+        )
+        mission_ids.append(mission.id)
+        if first_mission is None:
+            first_mission = mission
+            first_queue_status = queue_status
+
+    assert first_mission is not None and first_queue_status is not None  # plan_request never returns zero steps
+    return MissionAskResponse(
+        mission_id=first_mission.id,
+        status=first_mission.status.value,
+        queue_status=first_queue_status,
+        mission_ids=mission_ids,
+        plan_id=plan.plan_id,
+    )
 
 
 def get_mission(mission_id: str) -> Mission | None:

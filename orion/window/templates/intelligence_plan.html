@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section id="intelligence-plan">
+    <h1>Project Intelligence — Plan</h1>
+    <p class="subtitle">Task Planner basado en reglas: decompone una peticion en Misiones reales.</p>
+
+    <form method="get" action="/intelligence/plan" class="new-mission-form">
+        <label>Proyecto
+            <select name="project_id">
+                {% for choice in project_choices %}
+                <option value="{{ choice }}" {% if choice == project_id %}selected{% endif %}>{{ choice or "ORION-AI (self)" }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>Peticion
+            <input type="text" name="plan_request" placeholder="Construye la pagina de Cursos de ATMAN" value="{{ plan_request }}" style="width: 100%;">
+        </label>
+        <button class="btn-primary" type="submit">Generar plan</button>
+    </form>
+
+    {% if plan %}
+    <div class="card" style="max-width: 900px;">
+        <div class="card-header"><span class="card-name">Plan '{{ plan.template }}' — {{ plan.steps|length }} mision(es)</span></div>
+        <div class="card-row"><span class="label">plan_id</span><span>{{ plan.plan_id }}</span></div>
+    </div>
+
+    <table class="events-table">
+        <thead><tr><th>#</th><th>Titulo</th><th>Descripcion</th></tr></thead>
+        <tbody>
+        {% for step in plan.steps %}
+        <tr><td>{{ step.order }}</td><td>{{ step.title }}</td><td>{{ step.description }}</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+
+    <p style="margin-top: 1.5rem;"><a href="/intelligence?project_id={{ project_id }}">← Proyecto</a></p>
+</section>
+{% endblock %}

@@ -31,6 +31,7 @@ from orion.bridge import storage as bridge_storage
 from orion.bridge.models import Mission, MissionStatus
 from orion.execution import pipeline as execution_pipeline
 from orion.experience import services as experience_services
+from orion.intelligence import services as intelligence_services
 from orion.prompt_composer import services as prompt_composer_services
 
 AUTHOR = "Builder"
@@ -150,10 +151,28 @@ def _record_experience_safely(mission_id: str) -> None:
     mission = bridge_services.get_mission(mission_id)
     if mission is None:
         return
+    report = None
     try:
-        experience_services.record_experience(mission)
+        report = experience_services.record_experience(mission)
     except Exception as exc:  # noqa: BLE001 - recording experience must never crash the agent
         bridge_services.record_event(mission_id, "experience_generation_failed", str(exc), AUTHOR)
+
+    # BETA 008: fold this mission's real, already-computed outcome
+    # (files actually touched, confidence score) into the global
+    # Knowledge Graph -- "grows automatically", per the Sprint, rather
+    # than requiring a separate manual step. provider_name is left
+    # None: ExperienceReport does not currently track which provider
+    # ran the mission, and this must never guess one.
+    try:
+        intelligence_services.record_mission_knowledge(
+            mission_id=mission.id,
+            mission_title=mission.title,
+            provider_name=None,
+            files_touched=list(report.files_modified) if report is not None else [],
+            confidence_score=report.confidence_score if report is not None else None,
+        )
+    except Exception as exc:  # noqa: BLE001 - knowledge recording must never crash the agent
+        bridge_services.record_event(mission_id, "knowledge_recording_failed", str(exc), AUTHOR)
 
 
 # BETA 007 (Runtime): process_next() used to have exactly one caller
@@ -262,6 +281,27 @@ def run_claimed_mission(mission: Mission) -> Mission | None:
         )
     except Exception as exc:  # noqa: BLE001 - composing context must never crash the agent
         bridge_services.record_event(mission.id, "prompt_composer_failed", str(exc), AUTHOR)
+
+    # BETA 008: real Project Intelligence pass before the Executor runs
+    # a single line -- reuse-candidate search, a rule-based Plan, and a
+    # real pre-modification Impact Analysis against this mission's own
+    # request text (mission.description/mission.title), exactly the
+    # "understand before you write code" step the Sprint asks for.
+    # Deliberately informational, same as the Reviewer hook in
+    # orion.execution.pipeline: it records real, non-fabricated
+    # findings on the mission timeline, but a failure here (e.g. an
+    # unreadable repo, or a project with no local checkout yet) must
+    # never block or fail a mission whose actual work has not even
+    # started yet.
+    try:
+        brief = intelligence_services.prepare_request(
+            mission.description or mission.title,
+            project_key=mission.project_id or "",
+            mission_id=mission.id,
+        )
+        bridge_services.record_event(mission.id, "intelligence_brief", brief.summary_text(), AUTHOR)
+    except Exception as exc:  # noqa: BLE001 - analysis must never crash or block the agent
+        bridge_services.record_event(mission.id, "intelligence_failed", str(exc), AUTHOR)
 
     try:
         pipeline_result = execution_pipeline.run(mission)

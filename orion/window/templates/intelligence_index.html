@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section id="intelligence-index">
+    <h1>Project Intelligence — Proyecto</h1>
+    <p class="subtitle">Analisis real e incremental del repositorio (nunca simulado).</p>
+
+    <form method="get" action="/intelligence" class="new-mission-form">
+        <label>Proyecto
+            <select name="project_id">
+                {% for choice in project_choices %}
+                <option value="{{ choice }}" {% if choice == project_id %}selected{% endif %}>{{ choice or "ORION-AI (self)" }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <button class="btn-primary" type="submit">Analizar</button>
+    </form>
+
+    <div class="card-grid">
+        <div class="card">
+            <div class="card-header"><span class="card-name">Resumen</span></div>
+            <div class="card-row"><span class="label">Repo root</span><span>{{ index.repo_root }}</span></div>
+            <div class="card-row"><span class="label">Archivos indexados</span><span>{{ index.files|length }}</span></div>
+            <div class="card-row"><span class="label">Generado</span><span>{{ index.generated_at }}</span></div>
+            <div class="card-row"><span class="label">Docker</span><span>{{ profile.has_docker }}</span></div>
+            <div class="card-row"><span class="label">Compose</span><span>{{ profile.has_compose }}</span></div>
+            <div class="card-row"><span class="label">CI</span><span>{{ profile.has_ci }}</span></div>
+        </div>
+        <div class="card">
+            <div class="card-header"><span class="card-name">Lenguajes</span></div>
+            {% for lang, count in profile.languages.items() %}
+            <div class="card-row"><span class="label">{{ lang }}</span><span>{{ count }}</span></div>
+            {% else %}
+            <div class="card-row"><span>(ninguno detectado)</span></div>
+            {% endfor %}
+        </div>
+        <div class="card">
+            <div class="card-header"><span class="card-name">Por proposito</span></div>
+            {% for purpose, count in profile.counts_by_purpose.items() %}
+            <div class="card-row"><span class="label">{{ purpose }}</span><span>{{ count }}</span></div>
+            {% endfor %}
+        </div>
+        <div class="card">
+            <div class="card-header"><span class="card-name">Frameworks / Entrypoints</span></div>
+            <div class="card-row"><span class="label">Frameworks</span><span>{{ profile.frameworks|join(", ") or "—" }}</span></div>
+            <div class="card-row"><span class="label">Entrypoints</span><span>{{ profile.entrypoints|join(", ") or "—" }}</span></div>
+            <div class="card-row"><span class="label">TODOs</span><span>{{ profile.todo_items|length }}</span></div>
+        </div>
+    </div>
+
+    <p style="margin-top: 1.5rem;">
+        <a href="/intelligence/architecture?project_id={{ project_id }}">Arquitectura →</a> ·
+        <a href="/intelligence/dependencies?project_id={{ project_id }}">Dependencias →</a> ·
+        <a href="/intelligence/impact?project_id={{ project_id }}">Impacto →</a> ·
+        <a href="/intelligence/plan?project_id={{ project_id }}">Plan →</a> ·
+        <a href="/intelligence/review?project_id={{ project_id }}">Revisión →</a> ·
+        <a href="/intelligence/knowledge-graph">Knowledge Graph →</a>
+    </p>
+
+    {% if profile.todo_items %}
+    <h2>TODOs detectados</h2>
+    <table class="events-table">
+        <thead><tr><th>Archivo</th><th>Linea</th><th>Texto</th></tr></thead>
+        <tbody>
+        {% for item in profile.todo_items[:30] %}
+        <tr><td>{{ item.path }}</td><td>{{ item.line }}</td><td>{{ item.text }}</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section id="intelligence-impact">
+    <h1>Project Intelligence — Impacto</h1>
+    <p class="subtitle">Reporte real de pre-modificacion: que se rompe, que pruebas correr, cuanto riesgo.</p>
+
+    <form method="get" action="/intelligence/impact" class="new-mission-form">
+        <label>Proyecto
+            <select name="project_id">
+                {% for choice in project_choices %}
+                <option value="{{ choice }}" {% if choice == project_id %}selected{% endif %}>{{ choice or "ORION-AI (self)" }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>Archivos (uno por linea, rutas relativas al repo)
+            <textarea name="paths" rows="4" style="width: 100%;" placeholder="orion/executor/services.py">{{ paths_raw }}</textarea>
+        </label>
+        <button class="btn-primary" type="submit">Calcular impacto</button>
+    </form>
+
+    {% if report %}
+    <div class="card-grid">
+        <div class="card">
+            <div class="card-header"><span class="card-name">Riesgo: {{ report.risk }}</span></div>
+            <div class="card-row"><span class="label">Modulos afectados</span><span>{{ report.affected_modules|length }}</span></div>
+            <div class="card-row"><span class="label">Archivos afectados</span><span>{{ report.affected_files|length }}</span></div>
+            <div class="card-row"><span class="label">Pruebas relacionadas</span><span>{{ report.related_tests|length }}</span></div>
+            <div class="card-row"><span class="label">Complejidad acumulada</span><span>{{ report.complexity_sum }}</span></div>
+        </div>
+        <div class="card">
+            <div class="card-header"><span class="card-name">Razones</span></div>
+            {% for reason in report.reasons %}
+            <div class="card-row"><span>{{ reason }}</span></div>
+            {% else %}
+            <div class="card-row"><span>—</span></div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <h2>Archivos afectados</h2>
+    <table class="events-table">
+        <thead><tr><th>Archivo</th></tr></thead>
+        <tbody>
+        {% for f in report.affected_files %}
+        <tr><td>{{ f }}</td></tr>
+        {% else %}
+        <tr><td>(ninguno)</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    <h2>Pruebas relacionadas</h2>
+    <table class="events-table">
+        <thead><tr><th>Archivo de prueba</th></tr></thead>
+        <tbody>
+        {% for t in report.related_tests %}
+        <tr><td>{{ t }}</td></tr>
+        {% else %}
+        <tr><td>(ninguna)</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+
+    <p style="margin-top: 1.5rem;"><a href="/intelligence?project_id={{ project_id }}">← Proyecto</a></p>
+</section>
+{% endblock %}

@@ -88,12 +88,28 @@ class MissionAskRequest(BaseModel):
     description: str = ""
     project_id: str = ""
     tags: list[str] = Field(default_factory=list)
+    # BETA 008: opt-in only, default False. When True, ask() runs the
+    # request through orion.intelligence's rule-based Task Planner
+    # first and creates one real Mission per plan step instead of a
+    # single Mission for the raw request -- the "decompose complex
+    # requests into multiple Missions" behavior the Sprint asks for.
+    # Defaulting to False keeps every BETA 007 caller (including this
+    # exact request shape from before BETA 008 existed) byte-for-byte
+    # unchanged: one request in, exactly one Mission out.
+    auto_plan: bool = False
 
 
 class MissionAskResponse(BaseModel):
     mission_id: str
     status: str
     queue_status: QueueItemStatus
+    # BETA 008, additive: populated only when auto_plan=True was used.
+    # mission_id/status/queue_status above always describe the first
+    # Mission created (plan step 1), so any caller that only reads
+    # those three fields -- every BETA 007 caller -- keeps working
+    # exactly as before, single-mission or not.
+    mission_ids: list[str] = Field(default_factory=list)
+    plan_id: str = ""
 
 
 class HealthReport(BaseModel):

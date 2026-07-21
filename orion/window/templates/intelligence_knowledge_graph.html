@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section id="intelligence-knowledge-graph">
+    <h1>Project Intelligence — Knowledge Graph</h1>
+    <p class="subtitle">El modelo global de ORION: {{ graph.node_count() }} nodos, {{ graph.edge_count() }} relaciones. Crece con cada mision real.</p>
+
+    <h2>Nodos</h2>
+    <table class="events-table">
+        <thead><tr><th>Tipo</th><th>Id</th><th>Label</th></tr></thead>
+        <tbody>
+        {% for node in graph.nodes.values()|sort(attribute="type") %}
+        <tr><td>{{ node.type }}</td><td>{{ node.id }}</td><td>{{ node.label }}</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    <h2>Relaciones</h2>
+    <table class="events-table">
+        <thead><tr><th>Origen</th><th>Relacion</th><th>Destino</th></tr></thead>
+        <tbody>
+        {% for edge in graph.edges %}
+        <tr><td>{{ edge.source }}</td><td>{{ edge.relation }}</td><td>{{ edge.target }}</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    <p style="margin-top: 1.5rem;"><a href="/intelligence">← Proyecto</a></p>
+</section>
+{% endblock %}

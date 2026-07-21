@@ -12,10 +12,28 @@
                                   running Runtime's API, then wait for a
                                   Worker to finish it (or --no-wait to
                                   return immediately).
+    orion analyze                 Scan a project (real repository_analyzer +
+                                  project_index) and print the resulting
+                                  summary and architecture map.
+    orion understand "<request>"  Run the full Project Intelligence brief
+                                  for a natural-language request: reusable
+                                  components, plan, and impact -- exactly
+                                  what `orion ask` computes internally
+                                  before creating any Mission.
+    orion graph                   Show the real dependency graph, or with
+                                  --impacted-by PATH, what depends on it.
+    orion impact PATH [PATH ...]  Compute a real pre-modification impact
+                                  report for one or more files.
+    orion review PATH [PATH ...]  Run the real Reviewer over one or more
+                                  files.
+    orion plan "<request>"        Decompose a request into real Missions
+                                  via the rule-based Task Planner.
 
-BETA 007. Every command talks to the Runtime exclusively over its REST
-API (see orion/runtime/api.py) -- this file contains no mission
-execution logic of its own.
+BETA 007 commands talk to the Runtime exclusively over its REST API
+(see orion/runtime/api.py). BETA 008 Intelligence commands
+(analyze/understand/graph/impact/review/plan) call
+orion.intelligence.services directly -- local, static analysis, no
+running Runtime required. Neither talks to any LLM.
 """
 
 from __future__ import annotations
@@ -99,6 +117,7 @@ def cmd_ask(args: argparse.Namespace) -> int:
         "description": args.description or args.prompt,
         "project_id": args.project or "",
         "tags": args.tag or [],
+        "auto_plan": args.plan,
     }
 
     try:
@@ -111,35 +130,177 @@ def cmd_ask(args: argparse.Namespace) -> int:
         return 1
 
     mission_id = body["mission_id"]
-    print(f"Mision creada: {mission_id} (status inicial: {body['status']}, cola: {body['queue_status']})")
+    mission_ids = body.get("mission_ids") or [mission_id]
+    if len(mission_ids) > 1:
+        print(f"Plan '{body.get('plan_id', '')}': {len(mission_ids)} mision(es) creadas y encoladas:")
+        for mid in mission_ids:
+            print(f"  - {mid}")
+    else:
+        print(f"Mision creada: {mission_id} (status inicial: {body['status']}, cola: {body['queue_status']})")
 
     if args.no_wait:
         return 0
 
-    print("Esperando a que un Worker la procese...")
+    print(f"Esperando a que un Worker procese {'las' if len(mission_ids) > 1 else 'la'} mision(es)...")
     deadline = time.monotonic() + args.timeout
-    last_status = None
-    while time.monotonic() < deadline:
-        try:
-            detail = _get(f"{base_url}/missions/{mission_id}")
-        except urllib.error.URLError as exc:
-            print(f"Error consultando el Runtime: {exc}")
-            return 1
-        status = detail["mission"]["status"]
-        if status != last_status:
-            print(f"  status: {status}")
-            last_status = status
-        if status in ("REVIEW", "DONE", "FAILED"):
-            queue_item = detail.get("queue_item")
-            if queue_item:
-                print(f"Queue status: {queue_item['status']}")
-                if queue_item.get("error"):
-                    print(f"Error: {queue_item['error']}")
-            return 0 if status in ("REVIEW", "DONE") else 1
-        time.sleep(2)
+    last_status: dict[str, str] = {}
+    pending = set(mission_ids)
+    failed: set[str] = set()
+    while pending and time.monotonic() < deadline:
+        for mid in list(pending):
+            try:
+                detail = _get(f"{base_url}/missions/{mid}")
+            except urllib.error.URLError as exc:
+                print(f"Error consultando el Runtime para {mid}: {exc}")
+                return 1
+            status = detail["mission"]["status"]
+            if last_status.get(mid) != status:
+                print(f"  {mid}: {status}")
+                last_status[mid] = status
+            if status in ("REVIEW", "DONE", "FAILED"):
+                queue_item = detail.get("queue_item")
+                if queue_item and queue_item.get("error"):
+                    print(f"  {mid}: error: {queue_item['error']}")
+                if status == "FAILED":
+                    failed.add(mid)
+                pending.discard(mid)
+        if pending:
+            time.sleep(2)
 
-    print(f"Tiempo de espera agotado ({args.timeout}s) sin que la mision termine. mission_id={mission_id}")
-    return 1
+    if pending:
+        print(f"Tiempo de espera agotado ({args.timeout}s) sin que {len(pending)} mision(es) terminen: {sorted(pending)}")
+        return 1
+
+    if failed:
+        print(f"{len(failed)} de {len(mission_ids)} mision(es) fallaron: {sorted(failed)}")
+        return 1
+
+    return 0
+
+
+def _project_key(args: argparse.Namespace) -> str:
+    return args.project or ""
+
+
+def cmd_analyze(args: argparse.Namespace) -> int:
+    from orion.intelligence import services
+
+    index = services.analyze_project(_project_key(args), force_full=args.force_full)
+    profile = index.profile
+    print(f"Proyecto: {index.project_key}  (repo_root={index.repo_root})")
+    print(f"Archivos indexados: {index.file_count()}")
+    print("Lenguajes:", ", ".join(f"{lang}={n}" for lang, n in sorted(profile.languages.items(), key=lambda kv: -kv[1])) or "(ninguno)")
+    print("Frameworks detectados:", ", ".join(profile.frameworks) or "(ninguno)")
+    print(f"Docker: {profile.has_docker}  Compose: {profile.has_compose}  CI: {profile.has_ci}")
+    print("Entrypoints:", ", ".join(profile.entrypoints) or "(ninguno)")
+    print("Purpose breakdown:", ", ".join(f"{p}={n}" for p, n in sorted(profile.counts_by_purpose.items(), key=lambda kv: -kv[1])) or "(ninguno)")
+    print(f"TODOs encontrados: {len(profile.todo_items)}")
+
+    tree = services.get_architecture_map(_project_key(args))
+    print()
+    print("Mapa de arquitectura:")
+    _print_architecture_node(tree, indent=0)
+    return 0
+
+
+def _print_architecture_node(node, indent: int) -> None:
+    label = node.name or "(root)"
+    print("  " * indent + f"- {label} ({node.total_files()} archivos)")
+    for child in sorted(node.children.values(), key=lambda n: n.name):
+        _print_architecture_node(child, indent + 1)
+
+
+def cmd_understand(args: argparse.Namespace) -> int:
+    from orion.intelligence import services
+
+    brief = services.prepare_request(args.request, project_key=_project_key(args))
+    print(brief.summary_text())
+    print()
+    print(f"Archivos indexados: {brief.index_file_count}")
+    print(f"Componentes reutilizables encontrados: {len(brief.reusable_components)}")
+    for match in brief.reusable_components[:10]:
+        print(f"  - {match.path}  similitud={match.similarity:.2f}  {match.verdict}")
+        for reason in match.reasons:
+            print(f"      · {reason}")
+    print(f"Plan ('{brief.plan.template}'): {len(brief.plan.steps)} mision(es)")
+    for step in brief.plan.steps:
+        print(f"  - {step.title}: {step.description}")
+    print(f"Impacto: {len(brief.impact.affected_files)} archivo(s) afectado(s), riesgo {brief.impact.risk}")
+    for path in brief.impact.affected_files:
+        print(f"  - {path}")
+    return 0
+
+
+def cmd_graph(args: argparse.Namespace) -> int:
+    from orion.intelligence import services
+
+    graph = services.get_dependency_graph(_project_key(args))
+    print(f"Modulos: {len(graph.module_paths)}")
+
+    if args.impacted_by:
+        target = args.impacted_by
+        module = graph.module_for_path(target) if "/" in target or target.endswith(".py") else target
+        if module is None:
+            print(f"No se encontro un modulo real para '{target}'.")
+            return 1
+        impacted = graph.impacted_by(module)
+        print(f"Modulos que dependen de '{module}' (directa o transitivamente): {len(impacted)}")
+        for name in impacted:
+            path = graph.module_paths.get(name, "")
+            print(f"  - {name}" + (f"  ({path})" if path else ""))
+        return 0
+
+    print("Modulos indexados (usa --impacted-by <path_o_modulo> para el analisis 'que se rompe si cambio esto'):")
+    for name in sorted(graph.module_paths)[:40]:
+        print(f"  - {name}  ({graph.module_paths[name]})")
+    if len(graph.module_paths) > 40:
+        print(f"  ... y {len(graph.module_paths) - 40} mas.")
+    return 0
+
+
+def cmd_impact(args: argparse.Namespace) -> int:
+    from orion.intelligence import services
+
+    report = services.compute_impact(args.paths, project_key=_project_key(args))
+    print(f"Objetivos: {', '.join(report.target_paths)}")
+    print(f"Modulos afectados: {len(report.affected_modules)}")
+    for m in report.affected_modules:
+        print(f"  - {m}")
+    print(f"Archivos afectados: {len(report.affected_files)}")
+    for f in report.affected_files:
+        print(f"  - {f}")
+    print(f"Pruebas relacionadas: {len(report.related_tests)}")
+    for t in report.related_tests:
+        print(f"  - {t}")
+    print(f"Complejidad acumulada: {report.complexity_sum}")
+    print(f"Riesgo: {report.risk}")
+    for reason in report.reasons:
+        print(f"  · {reason}")
+    return 0
+
+
+def cmd_review(args: argparse.Namespace) -> int:
+    from orion.intelligence import services
+
+    report = services.run_review(args.paths, project_key=_project_key(args))
+    print(f"Archivos revisados: {', '.join(report.paths)}")
+    print(f"Hallazgos: {len(report.findings)}  Aprobado: {report.passed()}")
+    for finding in report.findings:
+        print(f"  [{finding.severity}] {finding.path}: {finding.message}")
+    return 0 if report.passed() else 1
+
+
+def cmd_plan(args: argparse.Namespace) -> int:
+    from orion.intelligence import services
+
+    plan = services.plan_request(args.request, project_key=_project_key(args))
+    print(f"Plan ('{plan.template}'): {len(plan.steps)} mision(es), plan_id={plan.plan_id}")
+    for i, step in enumerate(plan.steps, start=1):
+        print(f"  {i}. {step.title}")
+        print(f"     {step.description}")
+        if step.tags:
+            print(f"     tags: {', '.join(step.tags)}")
+    return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -164,7 +325,41 @@ def build_parser() -> argparse.ArgumentParser:
     ask_parser.add_argument("--port", type=int, default=None)
     ask_parser.add_argument("--no-wait", action="store_true")
     ask_parser.add_argument("--timeout", type=float, default=180.0)
+    ask_parser.add_argument(
+        "--plan", action="store_true",
+        help="Decompose the request into multiple real Missions via the Task Planner before creating them",
+    )
     ask_parser.set_defaults(func=cmd_ask)
+
+    analyze_parser = subparsers.add_parser("analyze", help="Scan a project (Project Intelligence)")
+    analyze_parser.add_argument("--project", default=None, help="Registered project_id (default: ORION-AI itself)")
+    analyze_parser.add_argument("--force-full", action="store_true", help="Ignore the incremental cache")
+    analyze_parser.set_defaults(func=cmd_analyze)
+
+    understand_parser = subparsers.add_parser("understand", help="Full Intelligence brief for a request")
+    understand_parser.add_argument("request", help="Natural-language request")
+    understand_parser.add_argument("--project", default=None)
+    understand_parser.set_defaults(func=cmd_understand)
+
+    graph_parser = subparsers.add_parser("graph", help="Real dependency graph")
+    graph_parser.add_argument("--project", default=None)
+    graph_parser.add_argument("--impacted-by", default=None, help="Module or file path: what depends on this")
+    graph_parser.set_defaults(func=cmd_graph)
+
+    impact_parser = subparsers.add_parser("impact", help="Pre-modification impact report")
+    impact_parser.add_argument("paths", nargs="+", help="One or more repo-relative file paths")
+    impact_parser.add_argument("--project", default=None)
+    impact_parser.set_defaults(func=cmd_impact)
+
+    review_parser = subparsers.add_parser("review", help="Run the Reviewer over one or more files")
+    review_parser.add_argument("paths", nargs="+", help="One or more repo-relative file paths")
+    review_parser.add_argument("--project", default=None)
+    review_parser.set_defaults(func=cmd_review)
+
+    plan_parser = subparsers.add_parser("plan", help="Decompose a request into Missions (Task Planner)")
+    plan_parser.add_argument("request", help="Natural-language request")
+    plan_parser.add_argument("--project", default=None)
+    plan_parser.set_defaults(func=cmd_plan)
 
     return parser
 

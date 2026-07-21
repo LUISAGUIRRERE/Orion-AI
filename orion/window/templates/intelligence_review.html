@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section id="intelligence-review">
+    <h1>Project Intelligence — Revisión</h1>
+    <p class="subtitle">Reviewer real: sintaxis, imports, docstrings, naming, seguridad, secretos.</p>
+
+    <form method="get" action="/intelligence/review" class="new-mission-form">
+        <label>Proyecto
+            <select name="project_id">
+                {% for choice in project_choices %}
+                <option value="{{ choice }}" {% if choice == project_id %}selected{% endif %}>{{ choice or "ORION-AI (self)" }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>Archivos (uno por linea, rutas relativas al repo)
+            <textarea name="paths" rows="4" style="width: 100%;" placeholder="orion/intelligence/services.py">{{ paths_raw }}</textarea>
+        </label>
+        <button class="btn-primary" type="submit">Revisar</button>
+    </form>
+
+    {% if report %}
+    <div class="card" style="max-width: 900px;">
+        <div class="card-header"><span class="card-name">{{ "Aprobada" if report.passed() else "Con hallazgos de severidad error" }}</span></div>
+        <div class="card-row"><span class="label">Hallazgos</span><span>{{ report.findings|length }}</span></div>
+    </div>
+
+    <table class="events-table">
+        <thead><tr><th>Severidad</th><th>Archivo</th><th>Categoria</th><th>Mensaje</th></tr></thead>
+        <tbody>
+        {% for f in report.findings %}
+        <tr><td>{{ f.severity }}</td><td>{{ f.path }}</td><td>{{ f.category }}</td><td>{{ f.message }}</td></tr>
+        {% else %}
+        <tr><td colspan="4">Sin hallazgos.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+
+    <p style="margin-top: 1.5rem;"><a href="/intelligence?project_id={{ project_id }}">← Proyecto</a></p>
+</section>
+{% endblock %}
