@@ -26,6 +26,39 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from orion.board import canonical
+
+# MISSION G-012 (Single Source of Truth): board_seat labels below used
+# to be hardcoded strings duplicating .ai/BOARD.md/.ai/ROLES.md by
+# hand. They are now derived from .ai/board.yaml (see
+# orion.board.canonical), with the exact original strings kept as a
+# fallback if the canonical file cannot be loaded for any reason (a
+# missing/corrupted .ai/board.yaml must never break every consumer of
+# this module -- Governance, Runtime, the CLI, the API, the Window --
+# only `orion board validate` should ever surface that as a real
+# error). Real drift between the fallback and the canonical file would
+# itself be caught by tests/test_board_canonical.py.
+try:
+    _CANONICAL_BOARD = canonical.load_board_config()
+except canonical.BoardConfigurationError:
+    _CANONICAL_BOARD = None
+
+
+def _seat_label(member_id: str, fallback: str) -> str:
+    if _CANONICAL_BOARD is not None:
+        member = _CANONICAL_BOARD.get(member_id)
+        if member is not None:
+            return member.seat_label()
+    return fallback
+
+
+def _composite_seat_label(member_ids: tuple[str, ...], fallback: str) -> str:
+    if _CANONICAL_BOARD is not None:
+        labels = [m.seat_label() for mid in member_ids if (m := _CANONICAL_BOARD.get(mid)) is not None]
+        if len(labels) == len(member_ids):
+            return " / ".join(labels)
+    return fallback
+
 
 @dataclass(frozen=True)
 class BoardMember:
@@ -41,7 +74,7 @@ MEMBERS: dict[str, BoardMember] = {
     "architect": BoardMember(
         key="architect",
         display_name="Architect",
-        board_seat="ChatGPT (Chief AI Architect) / Claude (Chief Software Architect)",
+        board_seat=_composite_seat_label(("chatgpt", "claude"), "ChatGPT (Chief AI Architect) / Claude (Chief Software Architect)"),
         implemented_by="orion.business.services (Business Brain) + orion.intelligence.services (Project Intelligence)",
         description=(
             "Entiende el pedido en el contexto real del negocio y del "
@@ -63,7 +96,7 @@ MEMBERS: dict[str, BoardMember] = {
     "builder": BoardMember(
         key="builder",
         display_name="Builder",
-        board_seat="Jules (Lead Software Engineer)",
+        board_seat=_seat_label("jules", "Jules (Lead Software Engineer)"),
         implemented_by="orion.agents.builder.agent + orion.execution.pipeline (Executor step)",
         description=(
             "Implementa unicamente lo ya aprobado -- exactamente lo que "
@@ -82,7 +115,7 @@ MEMBERS: dict[str, BoardMember] = {
     "reviewer": BoardMember(
         key="reviewer",
         display_name="Reviewer",
-        board_seat="Nemotron (Principal Engineering Reviewer)",
+        board_seat=_seat_label("nemotron", "Nemotron (Principal Engineering Reviewer)"),
         implemented_by="orion.intelligence.reviewer (via orion.intelligence.services.run_review)",
         description=(
             "Revisa el trabajo ya hecho, nunca lo suyo propio -- la "
@@ -109,7 +142,7 @@ MEMBERS: dict[str, BoardMember] = {
     "gitops": BoardMember(
         key="gitops",
         display_name="GitOps",
-        board_seat="AutoClaw (Operations Engineer)",
+        board_seat=_seat_label("autoclaw", "AutoClaw (Operations Engineer)"),
         implemented_by="orion.execution.git_manager (via orion.execution.pipeline)",
         description=(
             "Automatiza rama/commit/push/PR -- exactamente el rol "
