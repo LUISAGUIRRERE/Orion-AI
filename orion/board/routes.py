@@ -1,13 +1,24 @@
-"""HTTP API for orion.board (B-011: AI Board Orchestrator). Same
-pattern orion.governance.routes/orion.intelligence.routes/orion.
-business.routes already establish: a separate router, mounted
-alongside the other kernel routers in orion.window.app, every endpoint
-a thin wrapper over orion.board.services -- the only module allowed to
-hold real Board logic.
+"""HTTP API for orion.board (B-011: AI Board Orchestrator; extended by
+G-012 with the read-only ``/roster`` endpoint). Same pattern
+orion.governance.routes/orion.intelligence.routes/orion.business.routes
+already establish: a separate router, mounted alongside the other
+kernel routers in orion.window.app, every endpoint a thin wrapper over
+orion.board.services/orion.board.canonical -- never a second, parallel
+source of truth.
 
 Namespaced under /api/board -- verified free of collisions before
 choosing it, same discipline every prior Sprint's routes.py applied
 for its own prefix.
+
+G-012 note: /members below already reads its ``board_seat`` labels
+through orion.board.member_registry, which itself now derives those
+labels from .ai/board.yaml (orion.board.canonical) -- no route change
+was needed there for it to reflect the canonical source. /roster is
+the one genuinely new endpoint: it exposes the actual AI Board roster
+(who: Luis/ChatGPT/Claude/Jules/Nemotron/AutoClaw), a different
+concern from /members' Mission pipeline stages. It never returns
+agent prompt file contents (only their path), per this Mission's
+"no expongas... prompts internos" constraint.
 """
 
 from __future__ import annotations
@@ -16,8 +27,29 @@ from fastapi import APIRouter, HTTPException, Query
 
 from orion.board import services as board_services
 from orion.board.board_engine import decide_pipeline
+from orion.board.canonical import BoardConfigurationError, load_board_config
 
 router = APIRouter(prefix="/api/board", tags=["board"])
+
+
+@router.get("/roster")
+def get_roster() -> list[dict]:
+    try:
+        config = load_board_config()
+    except BoardConfigurationError as exc:
+        raise HTTPException(status_code=500, detail=f"BoardConfigurationError: {exc}")
+    return [
+        {
+            "id": m.id,
+            "display_name": m.display_name,
+            "role": m.role,
+            "status": m.status,
+            "responsibilities": list(m.responsibilities),
+            "restrictions": list(m.restrictions),
+            "documentation_path": m.documentation_path,
+        }
+        for m in config.members
+    ]
 
 
 @router.get("/members")

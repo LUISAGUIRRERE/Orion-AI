@@ -352,8 +352,23 @@ async def board_page(request: Request) -> HTMLResponse:
     for decision in decisions:
         progress = board_services.get_progress(decision.mission_id) or []
         missions_progress.append({"decision": decision, "progress": progress})
+
+    # G-012 (Single Source of Truth): the real AI Board roster, read
+    # directly from .ai/board.yaml -- distinct from `members` above
+    # (Mission pipeline stages). A load failure here must never break
+    # this page; it only means the roster panel is empty, same
+    # defensive pattern every other hook in this codebase already
+    # follows.
+    from orion.board.canonical import BoardConfigurationError, load_board_config
+
+    try:
+        roster = load_board_config().members
+    except BoardConfigurationError:
+        roster = []
+
     context = {
         "members": board_services.describe_members(),
+        "roster": roster,
         "missions_progress": missions_progress,
         **_topbar_context(),
     }

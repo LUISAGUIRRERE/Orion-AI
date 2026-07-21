@@ -16,14 +16,20 @@ Agents must never invent governance.
 
 ## AI Board
 
+The table below is generated from [`.ai/board.yaml`](.ai/board.yaml) -- the Single Source of Truth for Board composition (MISSION G-012). Do not edit it by hand; run `orion board generate` after changing `.ai/board.yaml`. See [`docs/BOARD_SOURCE_OF_TRUTH.md`](docs/BOARD_SOURCE_OF_TRUTH.md) for how to add or update a member.
+
+<!-- BEGIN GENERATED: .ai/board.yaml (orion.board.generator) -->
+
 | Name | Role | Responsible For | Prompt |
 |---|---|---|---|
-| Luis Aguirre | CEO / Product Owner | Final authority on product and business decisions | — (human) |
+| Luis Aguirre | CEO and Product Owner | Final authority on all product and business decisions | — (human) |
 | ChatGPT | Chief AI Architect | Product architecture, AI strategy, long-term vision, system design | [`chatgpt-architect.md`](.ai/prompts/chatgpt-architect.md) |
 | Claude | Chief Software Architect | Documentation, software architecture, engineering standards, repository organization | [`claude-architect.md`](.ai/prompts/claude-architect.md) |
 | Jules | Lead Software Engineer | Implementing approved GitHub Issues through Pull Requests | [`jules-engineer.md`](.ai/prompts/jules-engineer.md) |
-| Nemotron | Principal Engineering Reviewer | Independent review of architecture, documentation, and implementation | [`nemotron-reviewer.md`](.ai/prompts/nemotron-reviewer.md) |
-| AutoClaw | Operations Engineer | Automation, tooling, CI/CD, operational workflows | [`autoclaw-operations.md`](.ai/prompts/autoclaw-operations.md) |
+| Nemotron | Principal Engineering Reviewer | Independently reviewing architecture, documentation, and implementation | [`nemotron-reviewer.md`](.ai/prompts/nemotron-reviewer.md) |
+| AutoClaw | Operations Engineer | Automation, tooling, CI/CD, and operational workflows | [`autoclaw-operations.md`](.ai/prompts/autoclaw-operations.md) |
+
+<!-- END GENERATED -->
 
 ## Rules Every Agent Must Follow
 

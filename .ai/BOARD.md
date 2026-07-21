@@ -8,14 +8,20 @@ The Board exists to keep architecture, implementation, review, and approval as s
 
 ## Membership
 
+The table below is generated from [`board.yaml`](board.yaml) -- the Single Source of Truth for Board composition (MISSION G-012). Do not edit it by hand; run `orion board generate` after changing `board.yaml`.
+
+<!-- BEGIN GENERATED: .ai/board.yaml (orion.board.generator) -->
+
 | Name | Role | Authority |
 |---|---|---|
 | Luis Aguirre | CEO and Product Owner | Final authority on all product and business decisions |
 | ChatGPT | Chief AI Architect | Product architecture, AI strategy, long-term vision, system design |
 | Claude | Chief Software Architect | Documentation, software architecture, engineering standards, repository organization |
-| Jules | Lead Software Engineer | Implements approved GitHub Issues through Pull Requests |
-| Nemotron | Principal Engineering Reviewer | Independently reviews architecture, documentation, and implementation; never reviews its own work |
+| Jules | Lead Software Engineer | Implementing approved GitHub Issues through Pull Requests |
+| Nemotron | Principal Engineering Reviewer | Independently reviewing architecture, documentation, and implementation |
 | AutoClaw | Operations Engineer | Automation, tooling, CI/CD, and operational workflows |
+
+<!-- END GENERATED -->
 
 Full responsibilities and boundaries for each seat are defined in [`ROLES.md`](ROLES.md).
 

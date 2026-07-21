@@ -5,7 +5,26 @@
     <h1>AI Board Orchestrator</h1>
     <p class="subtitle">Que miembro del AI Board participa en cada etapa de una mission -- sin roles nuevos, reutilizando Governance/Runtime/Business Brain/Project Intelligence/Experience.</p>
 
-    <h2>Miembros del Board</h2>
+    <h2>Roster oficial del AI Board</h2>
+    <p class="subtitle">Fuente unica de verdad: <code>.ai/board.yaml</code> (MISSION G-012). No editar las tablas generadas en AGENTS.md / .ai/BOARD.md a mano -- usar <code>orion board generate</code>.</p>
+    <table class="events-table">
+        <thead><tr><th>Nombre</th><th>Rol</th><th>Estado</th><th>Responsabilidades</th></tr></thead>
+        <tbody>
+            {% for m in roster %}
+            <tr>
+                <td>{{ m.display_name }}</td>
+                <td>{{ m.role }}</td>
+                <td>{{ m.status }}</td>
+                <td>{{ m.responsibilities|join("; ") }}</td>
+            </tr>
+            {% endfor %}
+            {% if not roster %}
+            <tr><td colspan="4">No se pudo cargar .ai/board.yaml (ver `orion board validate`).</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+
+    <h2>Etapas de mission (pipeline)</h2>
     <div class="card-grid">
         {% for m in members %}
         <div class="card">

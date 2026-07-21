@@ -543,6 +543,46 @@ def cmd_board_progress(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_board_validate(args: argparse.Namespace) -> int:
+    from orion.board.canonical import BoardConfigurationError, load_board_config
+
+    try:
+        config = load_board_config()
+    except BoardConfigurationError as exc:
+        print(f"BoardConfigurationError: {exc}")
+        return 1
+    print(f".ai/board.yaml es valido (schema_version={config.schema_version}, board_version={config.board_version}).")
+    for member in config.members:
+        print(f"  [{member.status:8s}] {member.id:15s} {member.display_name:12s} -- {member.role}")
+    return 0
+
+
+def cmd_board_generate(args: argparse.Namespace) -> int:
+    from orion.board.canonical import BoardConfigurationError
+    from orion.board.generator import generate
+
+    try:
+        results = generate(check_only=args.check)
+    except BoardConfigurationError as exc:
+        print(f"BoardConfigurationError: {exc}")
+        return 1
+
+    any_drift = False
+    for result in results:
+        if result.has_drift:
+            any_drift = True
+            if args.check:
+                print(f"DRIFT: {result.path} no coincide con lo generado desde .ai/board.yaml.")
+            else:
+                print(f"Actualizado: {result.path}")
+        else:
+            print(f"Sin cambios: {result.path}")
+
+    if args.check:
+        return 1 if any_drift else 0
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="orion", description="ORION CLI (BETA 007 Runtime)")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -681,6 +721,15 @@ def build_parser() -> argparse.ArgumentParser:
     board_progress_parser = board_sub.add_parser("progress", help="Show real per-stage progress for a mission")
     board_progress_parser.add_argument("--mission-id", required=True)
     board_progress_parser.set_defaults(func=cmd_board_progress)
+
+    board_validate_parser = board_sub.add_parser("validate", help="Validate .ai/board.yaml (schema + references), never writes")
+    board_validate_parser.set_defaults(func=cmd_board_validate)
+
+    board_generate_parser = board_sub.add_parser(
+        "generate", help="Regenerate AGENTS.md/.ai/BOARD.md tables from .ai/board.yaml (idempotent)"
+    )
+    board_generate_parser.add_argument("--check", action="store_true", help="Detect drift only, never write; non-zero exit if drift found")
+    board_generate_parser.set_defaults(func=cmd_board_generate)
 
     return parser
 
