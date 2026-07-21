@@ -169,6 +169,44 @@ This ADR was executed under MISSION-0001, the first Mission issued under this fr
 - `.orion/TEAM.md`'s current disagreement with `.ai/ROLES.md` (Codex recorded as Builder, Jules recorded as GitOps — neither reflected in `.ai/ROLES.md`'s seat descriptions) becomes operationally load-bearing, since Mission Ownership resolves through `TEAM.md`. This remains an open item for Luis to resolve.
 - Pull Requests going forward are expected to reference a Mission ID; PRs without one should be treated as Minor Documentation only, per `.ai/DECISION_PROCESS.md`.
 
+## ADR-0006: Single Source of Truth for AI Board Composition
+
+**Status:**
+Accepted
+
+**Author:**
+Claude
+
+**Reviewed by:**
+Not yet performed by Nemotron — implemented under MISSION G-012's explicit RELEASE/HARDENING autonomy policy, which authorizes recording this ADR as part of the mission's own governance/audit step. Formal Nemotron review is an open item, consistent with the precedent already set by ADR-0004.
+
+**Approved by:**
+Luis Aguirre (via MISSION G-012's own governance instructions)
+
+**Date:**
+2026-07-21
+
+**Supersedes:**
+None (extends ADR-0001; does not replace it)
+
+**Context:**
+The AI Board's roster (Luis Aguirre, ChatGPT, Claude, Jules, Nemotron, AutoClaw — established in ADR-0001) was recorded by hand in two places with independently-maintained tables: `AGENTS.md`'s "AI Board" section and `.ai/BOARD.md`'s "Membership" section. Nothing enforced agreement between them, and `orion/board/member_registry.py` (introduced by MISSION B-011 for a different concern — Mission pipeline stage routing) separately hardcoded short labels for four of the same six seats. A request to add `agents/gemini.md` (a system-prompt-style document for a proposed "Gemini" research agent) surfaced the risk directly: nothing in the repository distinguished "a file describing an agent exists" from "this agent is an approved AI Board member," and no single place could be checked to answer that question authoritatively.
+
+**Decision:**
+Introduce `.ai/board.yaml` as the single, machine-readable Single Source of Truth for AI Board *composition* (who: id, display name, role, status, short responsibilities/restrictions, and a pointer to that member's documentation). It is loaded and validated by `orion.board.canonical.load_board_config()`, which rejects malformed input with a specific, actionable error rather than silently accepting it.
+
+- `AGENTS.md`'s "AI Board" table and `.ai/BOARD.md`'s "Membership" table are now generated from `.ai/board.yaml` by `orion.board.generator`, between explicit `BEGIN GENERATED`/`END GENERATED` markers; everything else in both files remains hand-written.
+- `.ai/ROLES.md` (full prose per seat), `.ai/prompts/*.md` (system prompts), `agents/*.md` (per-agent instructions), and this ADR log are **not** generated — they remain authoritative, hand-written documents, per this Mission's own explicit instruction not to convert narrative decisions into generated data.
+- `orion.board.member_registry` (B-011's Mission pipeline stage registry — a distinct concept from Board *membership*) now derives its `board_seat` label strings from `.ai/board.yaml` instead of hardcoding them a second time, with a safe fallback to the original literal strings if the canonical file cannot be loaded, so a malformed `board.yaml` can never break Governance, Runtime, the CLI, the API, or the Window.
+- `orion board validate` / `orion board generate` / `orion board generate --check` are the only supported ways to check or regenerate the derived tables; hand-editing the generated blocks is explicitly against convention (documented in `docs/BOARD_SOURCE_OF_TRUTH.md`) and will be silently overwritten by the next `generate`.
+- **Gemini is deliberately not listed in `.ai/board.yaml`.** `agents/gemini.md` exists, but no ADR has approved Gemini as an official Board seat — per this Mission's own explicit rule, a file under `agents/` is not itself a membership decision. Adding Gemini (or any member) requires an ADR first, then a `.ai/board.yaml` edit, never the reverse.
+
+**Consequences:**
+- Future Board composition changes touch exactly one structured file (`.ai/board.yaml`) plus, when applicable, `.ai/ROLES.md`'s narrative prose — never two independently-maintained tables.
+- `orion board generate --check` can be wired into CI to catch any future hand-edit of the generated blocks (drift) before merge.
+- This ADR does not resolve `.orion/TEAM.md`'s pre-existing, separately-tracked disagreement with `.ai/ROLES.md` about abstract role assignments (Codex as "Builder," Jules as "GitOps") — that remains a distinct, already-open governance item per ADR-0004/ADR-0005, deliberately out of scope here since it concerns `PROTOCOL.md`'s abstract role-mapping layer, not AI Board membership itself.
+- A pre-existing, intermittent concurrency test flake in `tests/test_runtime.py::SchedulerTests` (unrelated to this Mission — no file it touches was modified here) was newly reproduced during this Mission's repeated validation runs and is disclosed in MISSION G-012's final report as a known, pre-existing issue, not introduced or fixed by this change.
+
 ## ADR Template
 
 Use this template for every new ADR:
