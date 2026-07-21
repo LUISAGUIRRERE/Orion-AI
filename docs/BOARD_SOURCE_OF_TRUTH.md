@@ -24,9 +24,11 @@ Before this Mission, the AI Board's roster (Luis Aguirre, ChatGPT, Claude, Jules
       responsibilities: [ "..." ]        # list of strings
       restrictions: [ "..." ]            # list of strings
       capabilities: [ ]                  # list of strings, currently unused
-      documentation_path: .ai/prompts/jules-engineer.md   # optional; if set, must exist
-      supersedes: null                   # optional; must reference a known member id if set
+      documentation_path: .ai/prompts/jules-engineer.md   # optional; repo-relative, no absolute paths or traversal, must exist if set
+      supersedes: null                   # optional; must reference a known, different member id if set
   ```
+
+  Validation rejects, with a specific error message: unknown top-level or per-member keys, a non-integer or boolean `schema_version`/`board_version`, a non-string `id`/`display_name`/`role`, an empty `role`, an invalid `status`, a non-list `responsibilities`/`restrictions`/`capabilities` or any non-string/empty entry inside them, an absolute or path-traversing `documentation_path`, a missing documentation file, a member superseding itself, and an unknown `supersedes` reference.
 
 ## What lives where (and why it isn't duplicated)
 
@@ -63,11 +65,11 @@ Nothing outside those two marked blocks is touched by generation — headings, "
 ## API
 
 - `GET /api/board/roster` — the real AI Board roster (id, display_name, role, status, responsibilities, restrictions, documentation_path). Never returns the contents of any prompt/agent file, only its path.
-- `GET /api/board/members` — unchanged from B-011 (Mission pipeline stages); its `board_seat` labels are now derived from `.ai/board.yaml` instead of a hardcoded string, with no change to the response shape.
+- `GET /api/board/members` — unchanged from B-011 (Mission pipeline stages); its `board_seat` label is resolved fresh, per request, directly from `.ai/board.yaml` (never cached, never a hardcoded fallback string); if resolution fails, `board_seat` is `null` and the real reason is available via `orion board validate`, with no change to the response shape.
 
 ## Compatibility
 
-- `orion.board.member_registry`'s public API (`MEMBERS`, `ALL_KEYS`, `get_member()`, `list_members()`) is unchanged. Its `board_seat` values are now *derived* from `.ai/board.yaml` (falling back to the original hardcoded strings if the canonical file cannot be loaded, so a broken YAML never breaks Governance, Runtime, the CLI, the API, or the Window — only `orion board validate` surfaces that as a real error).
+- `orion.board.member_registry`'s public API (`MEMBERS`, `ALL_KEYS`, `get_member()`, `list_members()`) is unchanged. `MEMBERS` holds the static pipeline-stage templates only (never a resolved seat). `get_member()`/`list_members()` resolve `board_seat` fresh against `.ai/board.yaml` on every call — no caching, no fallback identity. If the canonical file cannot be loaded, `board_seat` is `None` and `board_seat_error` holds the real error message, so a broken YAML never crashes Governance, Runtime, the CLI, the API, or the Window — it only means the seat label is reported as unavailable, with the real reason attached.
 - B-011's Mission pipeline selection (`orion.board.board_engine.decide_pipeline`) is entirely unaffected — it never reads `.ai/board.yaml` at all.
 - Every existing `/api/board/*` route continues to work exactly as before; `/roster` is additive.
 
@@ -80,7 +82,7 @@ Run `orion board generate --check` in CI. A non-zero exit means `AGENTS.md` or `
 If this Mission's change needs to be reverted:
 
 1. Revert the merge commit(s) introduced by branch `feat/ai-board-single-source-of-truth` (or the specific commits: see this Mission's final report for exact hashes).
-2. That restores `AGENTS.md` and `.ai/BOARD.md` to their previous, fully hand-written state, restores `orion/board/member_registry.py`'s hardcoded `board_seat` strings, and removes `.ai/board.yaml`, `orion/board/canonical.py`, and `orion/board/generator.py`.
+2. That restores `AGENTS.md` and `.ai/BOARD.md` to their previous, fully hand-written state, restores `orion/board/member_registry.py`'s original always-resolved (no `board_seat_error` field) shape, and removes `.ai/board.yaml`, `orion/board/canonical.py`, and `orion/board/generator.py`.
 3. No agent file under `agents/` or `.ai/prompts/` is deleted by this Mission or by reverting it — none of them are touched.
 4. No import outside `orion.board` depends on `orion.board.canonical` or `orion.board.generator`, so reverting cannot break any other module.
 5. Verify with: `python3 -m unittest discover -s tests` (expect the same test count as before this Mission, since `tests/test_board_canonical.py` is removed along with the revert).
