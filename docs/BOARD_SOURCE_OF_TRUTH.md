@@ -73,6 +73,15 @@ Nothing outside those two marked blocks is touched by generation — headings, "
 - B-011's Mission pipeline selection (`orion.board.board_engine.decide_pipeline`) is entirely unaffected — it never reads `.ai/board.yaml` at all.
 - Every existing `/api/board/*` route continues to work exactly as before; `/roster` is additive.
 
+## Write safety (what "atomic" actually means here)
+
+`orion board generate` writes two target files (`AGENTS.md` and `.ai/BOARD.md`). It is important to be precise about what is and is not guaranteed, since "atomic" is easy to overclaim:
+
+- **Per-file atomicity — real, filesystem-backed.** Each target is written to a temp file in its own directory and swapped into place with `os.replace()`, which is atomic on the same filesystem. A reader can only ever see that one file's old, complete content or its new, complete content — never a truncated or partially-written file.
+- **Set-level coherence across the two targets — compensating rollback, not a filesystem transaction.** Ordinary filesystems do not offer a transaction spanning two independent files, and this module does not pretend otherwise. Instead: every target is rendered and validated *before* anything is mutated; every target's original content is backed up and every target's replacement temp file is fully prepared *before* any real path is touched; only then are the per-file atomic swaps performed, in order. If a later swap fails, every target already swapped in that same run is restored — via another per-file atomic write — back to its backed-up original content, so a caller never observes one file updated to the new roster and the other still on the old one; a `GeneratorError` is raised either way, naming what failed.
+- **A subsequent `generate()` always self-heals.** Since generation is idempotent and re-reads `.ai/board.yaml` fresh every time, running `orion board generate` again after any failure (rolled back or not) reconciles both targets correctly.
+- **Disclosed limit.** The restore step is itself a real write and can theoretically fail too (e.g. the filesystem that just rejected a replace becomes fully unwritable). In that case `GeneratorError`'s message names every target it could not restore, and manual inspection is genuinely required — this is not silently reported as success. Similarly, if the process is killed at the exact instant between one target's swap and the next (or during the restore itself), the two targets can transiently disagree; there is no protection against that specific abrupt-termination window beyond re-running `orion board generate --check` (or `generate`) afterward, which will detect and fix any remaining drift, since generation always compares against the current `.ai/board.yaml`, never against in-memory state left over from the interrupted run.
+
 ## Detecting drift (CI)
 
 Run `orion board generate --check` in CI. A non-zero exit means `AGENTS.md` or `.ai/BOARD.md` no longer matches what `.ai/board.yaml` would produce — usually because one was hand-edited. Fix by running `orion board generate` (without `--check`) and committing the result, never by hand-editing the generated block.
