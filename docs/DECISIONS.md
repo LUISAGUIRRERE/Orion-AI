@@ -93,6 +93,43 @@ The first software component to be built will be the **Executive Orchestrator**,
 **Consequences:**
 Implementation work should not begin on any of these components until each has an approved GitHub Issue scoping it. This ADR authorizes description and design work, not code.
 
+## ADR-0004: Implement Automated GitOps Release Pipeline
+
+**Status:**
+Accepted
+
+**Author:**
+AutoClaw
+
+**Reviewed by:**
+Nemotron
+
+**Approved by:**
+Luis Aguirre
+
+**Date:**
+2026-07-17
+
+**Supersedes:**
+None
+
+**Context:**
+To eliminate manual intervention over Git operations (creating branches, committing, managing pull requests, merges, and updating logs), we require a robust, automated GitOps Release Pipeline. All operations must run via programmatic workflows and command-line automation, adhering strictly to ORION OS's principles of segregation of duties, vendor neutrality, and quality standards, without modifying the runtime application.
+
+**Decision:**
+Implement a comprehensive Python-based GitOps engine (`scripts/orion_gitops.py`) and corresponding GitHub Actions workflows (`.github/workflows/gitops_pipeline.yml`) to:
+1. Automatically create and prepare feature/fix branches from approved issues/missions.
+2. Automate standardized commits according to project conventions.
+3. Automate the generation, verification, and formatting of Pull Requests.
+4. Automate the updates of `CHANGELOG.md` upon issue or PR approval.
+5. Automate semantic versioning, tagging, and Release generation.
+6. Automate clean merges into the trunk.
+
+This workflow is fully programmatic and can be run locally or via CI/CD pipelines.
+
+**Consequences:**
+Human/AI manual overhead for Git commands is completely eliminated. The release pipeline ensures absolute traceability, consistency, and compliance with the defined governance rules. Every release is systematically tagged and documented in `CHANGELOG.md`.
+
 ## ADR Template
 
 Use this template for every new ADR:

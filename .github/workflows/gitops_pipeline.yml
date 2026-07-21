@@ -1,0 +1,95 @@
+name: ORION OS Release Pipeline
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'GitOps Action to trigger'
+        required: true
+        default: 'approve'
+        type: choice
+        options:
+          - create-branch
+          - create-pr
+          - approve
+      issue_id:
+        description: 'Issue ID (for create-branch)'
+        required: false
+      title:
+        description: 'Title / Message'
+        required: false
+      version:
+        description: 'Target Version (for approve / tagging)'
+        required: false
+        default: '1.0.1'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  gitops:
+    name: Run GitOps Automation
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'approved'))
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "Orion AI (via AutoClaw)"
+          git config --global user.email "luis@atmanme.com"
+
+      - name: Execute GitOps Pipeline Action (Workflow Dispatch)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          if [ "${{ github.event.inputs.action }}" = "create-branch" ]; then
+            python scripts/orion_gitops.py create-branch --issue-id "${{ github.event.inputs.issue_id }}" --title "${{ github.event.inputs.title }}"
+          elif [ "${{ github.event.inputs.action }}" = "create-pr" ]; then
+            python scripts/orion_gitops.py create-pr --title "${{ github.event.inputs.title }}" --description "Automated PR created by GitOps pipeline."
+          elif [ "${{ github.event.inputs.action }}" = "approve" ]; then
+            # Extract branch name of current run
+            CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+            python scripts/orion_gitops.py approve --branch "$CURRENT_BRANCH" --version "${{ github.event.inputs.version }}" --message "${{ github.event.inputs.title }}"
+          fi
+
+      - name: Execute GitOps Pipeline Action (PR Merged)
+        if: github.event_name == 'pull_request' && github.event.pull_request.merged == true
+        run: |
+          # Automatically update CHANGELOG and tag on merged pull request
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          PR_BRANCH="${{ github.event.pull_request.head.ref }}"
+
+          # Auto-calculate semantic patch version (extracting version from latest tag or defaults)
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v1.0.0")
+          VERSION_NUM=$(echo $LATEST_TAG | sed 's/v//')
+          MAJOR=$(echo $VERSION_NUM | cut -d. -f1)
+          MINOR=$(echo $VERSION_NUM | cut -d. -f2)
+          PATCH=$(echo $VERSION_NUM | cut -d. -f3)
+          NEW_PATCH=$((PATCH + 1))
+          NEXT_VERSION="$MAJOR.$MINOR.$NEW_PATCH"
+
+          echo "[*] Merged PR detected. Auto-promoting version to $NEXT_VERSION"
+
+          # Update CHANGELOG and Tag Release
+          python scripts/orion_gitops.py update-changelog --version "$NEXT_VERSION" --category "added" --message "$PR_TITLE"
+
+          git add CHANGELOG.md
+          git commit -m "chore: update CHANGELOG.md for release v$NEXT_VERSION"
+          git push origin main
+
+          python scripts/orion_gitops.py tag-release --version "$NEXT_VERSION"
