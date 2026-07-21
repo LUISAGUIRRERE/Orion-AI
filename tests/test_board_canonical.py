@@ -545,6 +545,97 @@ class GeneratorTests(unittest.TestCase):
         leftover_temp_files = [p for p in siblings if p.name.startswith(f".{self._tmp_agents.name}.") and p.name.endswith(".tmp")]
         self.assertEqual(leftover_temp_files, [], leftover_temp_files)
 
+    def test_second_replace_failure_rolls_back_first_target_and_raises(self) -> None:
+        """G-012 REMEDIATION ROUND 2 (HIGH #3 remaining, per Codex's
+        exact adversarial prescription): inject a controlled failure
+        into the SECOND os.replace() call (AGENTS.md is _targets()'s
+        first target, .ai/BOARD.md its second). The first target must
+        be restored exactly to its pre-generate() content, the second
+        must never have changed at all, no target may be left holding
+        a partial/new mix, no .tmp or backup files may remain, a clear
+        GeneratorError must propagate, and an unpatched subsequent
+        generate() call must complete normally afterward."""
+        corrupted_agents = self._tmp_agents.read_text(encoding="utf-8").replace("Jules", "SOMEONE ELSE")
+        self._tmp_agents.write_text(corrupted_agents, encoding="utf-8")
+        corrupted_board_md = self._tmp_board_md.read_text(encoding="utf-8").replace("Jules", "SOMEONE ELSE")
+        self._tmp_board_md.write_text(corrupted_board_md, encoding="utf-8")
+
+        original_agents_content = self._tmp_agents.read_text(encoding="utf-8")
+        original_board_md_content = self._tmp_board_md.read_text(encoding="utf-8")
+
+        real_replace = generator.os.replace
+        call_count = {"n": 0}
+
+        def flaky_replace(src, dst):
+            call_count["n"] += 1
+            if call_count["n"] == 2:
+                raise OSError("simulated failure on the second os.replace()")
+            return real_replace(src, dst)
+
+        generator.os.replace = flaky_replace
+        try:
+            with self.assertRaises(generator.GeneratorError):
+                generator.generate()
+        finally:
+            generator.os.replace = real_replace
+
+        self.assertEqual(
+            self._tmp_agents.read_text(encoding="utf-8"),
+            original_agents_content,
+            "the first (already-replaced) target must be rolled back to its pre-generate() content",
+        )
+        self.assertEqual(
+            self._tmp_board_md.read_text(encoding="utf-8"),
+            original_board_md_content,
+            "the second (never-replaced) target must be completely untouched",
+        )
+
+        siblings = list(self._tmp_agents.parent.iterdir())
+        leftovers = [p for p in siblings if p.name.endswith(".tmp")]
+        self.assertEqual(leftovers, [], leftovers)
+
+        # A subsequent, unpatched run must complete normally and fix both.
+        generator.generate()
+        self.assertTrue(all(not r.has_drift for r in generator.check_drift()))
+        self.assertIn("Jules", self._tmp_agents.read_text(encoding="utf-8"))
+        self.assertIn("Jules", self._tmp_board_md.read_text(encoding="utf-8"))
+
+    def test_failure_preparing_first_temp_file_leaves_every_target_untouched(self) -> None:
+        """G-012 REMEDIATION ROUND 2 (HIGH #3 remaining): a failure
+        while preparing a temp file -- BEFORE any os.replace() has run
+        -- must leave every target exactly as it was; there is nothing
+        to roll back because nothing was ever replaced."""
+        corrupted_agents = self._tmp_agents.read_text(encoding="utf-8").replace("Jules", "SOMEONE ELSE")
+        self._tmp_agents.write_text(corrupted_agents, encoding="utf-8")
+        corrupted_board_md = self._tmp_board_md.read_text(encoding="utf-8").replace("Jules", "SOMEONE ELSE")
+        self._tmp_board_md.write_text(corrupted_board_md, encoding="utf-8")
+
+        original_agents_content = self._tmp_agents.read_text(encoding="utf-8")
+        original_board_md_content = self._tmp_board_md.read_text(encoding="utf-8")
+
+        real_mkstemp = generator.tempfile.mkstemp
+        call_count = {"n": 0}
+
+        def flaky_mkstemp(*args, **kwargs):
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                raise OSError("simulated failure preparing the first temp file")
+            return real_mkstemp(*args, **kwargs)
+
+        generator.tempfile.mkstemp = flaky_mkstemp
+        try:
+            with self.assertRaises(generator.GeneratorError):
+                generator.generate()
+        finally:
+            generator.tempfile.mkstemp = real_mkstemp
+
+        self.assertEqual(self._tmp_agents.read_text(encoding="utf-8"), original_agents_content)
+        self.assertEqual(self._tmp_board_md.read_text(encoding="utf-8"), original_board_md_content)
+
+        siblings = list(self._tmp_agents.parent.iterdir())
+        leftovers = [p for p in siblings if p.name.endswith(".tmp")]
+        self.assertEqual(leftovers, [], leftovers)
+
     def test_generated_table_escapes_pipe_and_newline_in_member_fields(self) -> None:
         """G-012 REMEDIATION (HIGH #4): a display_name/role/
         responsibility containing a literal '|' or a newline must not

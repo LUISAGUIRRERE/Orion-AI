@@ -117,20 +117,44 @@ def check_drift(config: BoardConfiguration | None = None) -> list[DriftResult]:
     return results
 
 
-def _atomic_write(path: Path, content: str) -> None:
-    """G-012 REMEDIATION (HIGH #3): temp-file-in-the-same-directory +
-    os.replace(), the exact same atomic-write idiom already used by
-    orion.governance.storage.write_yaml and orion.board.storage.
-    write_yaml -- never a direct write_text(), which can leave a
-    truncated/partial file on disk if the process is interrupted
-    mid-write. os.replace() is atomic on the same filesystem, so a
-    reader always sees either the old, complete content or the new,
-    complete content, never a mix of the two."""
+def _prepare_temp_file(path: Path, content: str) -> str:
+    """Writes ``content`` into a fresh temp file in ``path``'s own
+    directory and returns its name -- never touches ``path`` itself.
+    Kept as its own step (separate from the ``os.replace()`` swap) so
+    that, in generate() below, every target's temp file can be fully
+    prepared (the slow part: allocating and writing the file's bytes)
+    BEFORE any target's real path is mutated (the fast part: the swap
+    itself) -- G-012 REMEDIATION ROUND 2, HIGH #3 remaining, step 2."""
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp_name = tempfile.mkstemp(dir=str(path.parent), prefix=f".{path.name}.", suffix=".tmp")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
             fh.write(content)
+    except BaseException:
+        if os.path.exists(tmp_name):
+            os.unlink(tmp_name)
+        raise
+    return tmp_name
+
+
+def _atomic_write(path: Path, content: str) -> None:
+    """Single-file atomic write: temp-file-in-the-same-directory +
+    os.replace(), the exact same idiom already used by
+    orion.governance.storage.write_yaml and orion.board.storage.
+    write_yaml -- never a direct write_text(), which can leave a
+    truncated/partial file on disk if the process is interrupted
+    mid-write. os.replace() is atomic on the same filesystem, so a
+    reader always sees either the old, complete content or the new,
+    complete content for THIS ONE FILE, never a mix of the two.
+
+    This per-file guarantee is real, but it is not the same claim as
+    "replacing several files together is atomic" -- it is not; see
+    generate()'s compensating-rollback mechanism below for how the
+    multi-file case is actually made coherent, and
+    docs/BOARD_SOURCE_OF_TRUTH.md for the documented, honest scope of
+    each guarantee."""
+    tmp_name = _prepare_temp_file(path, content)
+    try:
         os.replace(tmp_name, path)
     finally:
         if os.path.exists(tmp_name):
@@ -141,15 +165,108 @@ def generate(config: BoardConfiguration | None = None, check_only: bool = False)
     """Regenerates every target from the canonical Board configuration.
     Idempotent and deterministic: given the same board.yaml, produces
     byte-identical output every time (stable member order, no
-    timestamps). Writes only the files that actually changed, and only
-    after every target has already been validated and rendered by
-    check_drift() above -- an all-or-nothing pass, never a partially
-    regenerated set of files. When ``check_only`` is True, never writes
-    -- same contract as check_drift(), returned in the same shape so
-    CLI callers share one code path for both commands."""
+    timestamps). When ``check_only`` is True, never writes -- same
+    contract as check_drift(), returned in the same shape so CLI
+    callers share one code path for both commands.
+
+    G-012 REMEDIATION ROUND 2 (HIGH #3 remaining, per Codex's second
+    REQUEST CHANGES): each individual ``os.replace()`` is atomic on
+    the same filesystem (see ``_atomic_write()``/``_prepare_temp_file()``
+    above), but writing this module's TWO targets (``AGENTS.md`` and
+    ``.ai/BOARD.md``) was, before this fix, a plain sequential loop --
+    if the second ``os.replace()`` failed after the first had already
+    succeeded, the repository was left with one file regenerated and
+    one not, a real inter-file inconsistency. There is still no
+    filesystem transaction spanning multiple files (ordinary
+    filesystems don't offer one, and this module does not pretend
+    otherwise -- see the docstrings above and
+    docs/BOARD_SOURCE_OF_TRUTH.md). Instead, this is a compensating
+    rollback:
+
+      1. Every target is already rendered AND validated by
+         check_drift() above before anything is mutated (missing
+         BEGIN/END markers or a missing target file raise
+         GeneratorError right there, before any write is attempted).
+      2. Every target's ORIGINAL on-disk content is read and kept as a
+         backup, and every target's new content is fully written into
+         its own temp file (``_prepare_temp_file()``) -- still without
+         touching any target's real path. If this step itself fails
+         (e.g. disk full while preparing a temp file), no target has
+         been touched at all: the leftover temp files are cleaned up
+         and a GeneratorError is raised.
+      3. Only once every temp file is ready does this function start
+         swapping them in, one ``os.replace()`` per target, in the
+         same deterministic order as ``_targets()``.
+      4. If a LATER ``os.replace()`` fails, every target already
+         swapped in this same run is restored -- via another
+         ``_atomic_write()`` -- back to the backed-up original content
+         read in step 2, any not-yet-consumed temp files are deleted,
+         and a GeneratorError describing exactly what failed (and
+         whether the rollback itself succeeded) is raised. No target
+         is ever left holding a "partially new" or mixed-revision
+         state, and a subsequent, unpatched call to generate() can
+         complete normally afterward.
+
+    Real, disclosed limit: the restore step in point 4 is itself a
+    real filesystem write, and could theoretically fail too (e.g. the
+    disk that just failed a replace is now completely full or
+    unwritable) -- in that rare case this function raises a
+    GeneratorError naming every target it could not restore, rather
+    than silently reporting success; manual inspection is genuinely
+    required at that point, exactly as the error message says."""
     results = check_drift(config=config)
-    if not check_only:
-        for result in results:
-            if result.has_drift:
-                _atomic_write(result.path, result.rendered)
+    if check_only:
+        return results
+
+    to_write = [r for r in results if r.has_drift]
+    if not to_write:
+        return results
+
+    backups: dict[Path, str] = {r.path: r.path.read_text(encoding="utf-8") for r in to_write}
+
+    prepared: list[tuple[Path, str]] = []
+    try:
+        for result in to_write:
+            tmp_name = _prepare_temp_file(result.path, result.rendered)
+            prepared.append((result.path, tmp_name))
+    except BaseException as exc:
+        for _, tmp_name in prepared:
+            if os.path.exists(tmp_name):
+                os.unlink(tmp_name)
+        raise GeneratorError(
+            f"generate() failed preparing a temporary file before replacing any target ({exc}); "
+            "no target file was modified"
+        ) from exc
+
+    replaced: list[Path] = []
+    try:
+        for path, tmp_name in prepared:
+            os.replace(tmp_name, path)
+            replaced.append(path)
+    except BaseException as exc:
+        rollback_errors: list[str] = []
+        for path in replaced:
+            try:
+                _atomic_write(path, backups[path])
+            except BaseException as rollback_exc:
+                rollback_errors.append(f"{path}: {rollback_exc}")
+
+        for path, tmp_name in prepared:
+            if path not in replaced and os.path.exists(tmp_name):
+                os.unlink(tmp_name)
+
+        if rollback_errors:
+            raise GeneratorError(
+                f"generate() failed replacing a target ({exc}); compensating rollback ALSO failed "
+                f"for: {'; '.join(rollback_errors)} -- targets may be left in an inconsistent state, "
+                "inspect manually before retrying"
+            ) from exc
+
+        raise GeneratorError(
+            f"generate() failed replacing a target ({exc}); every target already replaced in this "
+            "run was restored to its content from before this call, and no target was left "
+            "partially written or holding a mixed revision -- a subsequent generate() call can "
+            "retry normally"
+        ) from exc
+
     return results
