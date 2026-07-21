@@ -3,13 +3,14 @@
 {% block content %}
 <a href="/missions" class="back-link">&larr; Volver a Misiones</a>
 
-<section id="mission-detail">
+<section id="mission-detail" data-mission-id="{{ mission.id }}">
     <div class="card-header">
         <h1>{{ mission.id }} — {{ mission.title }}</h1>
+        <span><span id="live-indicator" class="live-indicator" title="Actualizacion en vivo via SSE (Runtime)"></span>en vivo</span>
     </div>
 
     <h2>Información general</h2>
-    <div class="card-row"><span class="label">Estado</span><span>{{ mission.status.value }}</span></div>
+    <div class="card-row"><span class="label">Estado</span><span id="mission-status-value">{{ mission.status.value }}</span></div>
     <div class="card-row"><span class="label">Responsable</span><span>{{ mission.owner or "—" }}</span></div>
     <div class="card-row"><span class="label">Business Unit</span><span>{{ mission.business_unit or "—" }}</span></div>
     <div class="card-row"><span class="label">Prioridad</span><span>{{ mission.priority }}</span></div>
@@ -55,7 +56,7 @@
         <thead>
             <tr><th>Fecha</th><th>Tipo</th><th>Mensaje</th><th>Autor</th></tr>
         </thead>
-        <tbody>
+        <tbody id="timeline-body">
             {% for event in events %}
             <tr>
                 <td>{{ event.timestamp }}</td>

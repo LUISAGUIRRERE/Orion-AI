@@ -107,9 +107,29 @@ class _EchoAdapter:
         )
 
 
+class _DeletingAdapter:
+    """BETA 006: proves the Executor's write loop honors
+    ExecutionArtifact.change_type == 'deleted' by actually removing
+    the target file from repo_root instead of writing to it."""
+
+    name = "test_deleting"
+
+    def execute(self, package: PromptPackage) -> ExecutionResult:
+        return ExecutionResult(
+            mission_id=package.mission.id,
+            adapter=self.name,
+            status=ExecutionStatus.SUCCEEDED,
+            artifacts=[
+                ExecutionArtifact(path="seed.txt", content="", description="borrado de prueba", change_type="deleted")
+            ],
+            summary="deleted ok",
+        )
+
+
 register_adapter(_SlowAdapter())
 register_adapter(_CrashingAdapter())
 register_adapter(_EchoAdapter())
+register_adapter(_DeletingAdapter())
 
 
 class ExecutorContractTests(unittest.TestCase):
@@ -209,6 +229,16 @@ class ExecutorContractTests(unittest.TestCase):
         self.assertEqual(calls, ["orion.providers.test_discovered"])
         self.assertEqual(files, ["echo.txt"])
         self.assertEqual(summary, "echoed ok")
+
+    def test_artifact_deletion_is_written_through(self) -> None:
+        # seed.txt already exists in every test's repo (see _init_repo)
+        self.assertTrue((self.repo_root / "seed.txt").is_file())
+        mission = _make_mission(id="MISSION-EXECUTOR-DELETE", tags=["adapter:test_deleting"])
+        self._prepare(mission)
+        files, summary = run_for_mission(mission, self.repo_root)
+        self.assertEqual(files, ["seed.txt"])
+        self.assertFalse((self.repo_root / "seed.txt").exists())
+        self.assertEqual(summary, "deleted ok")
 
     def test_successful_execution_writes_real_files(self) -> None:
         mission = _make_mission(id="MISSION-EXECUTOR-ECHO", tags=["adapter:test_echo"])

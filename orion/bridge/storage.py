@@ -11,6 +11,9 @@ per Sprint 005's explicit instruction. Mission data never touches it.
 
 from __future__ import annotations
 
+import os
+import tempfile
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -38,11 +41,36 @@ def _read_yaml(path: Path, default: Any) -> Any:
     return data if data is not None else default
 
 
+# BETA 007 concurrency fix (found via the full test suite run under
+# tests/test_runtime.py's Worker/Scheduler tests, which -- unlike
+# every caller before this Sprint -- can have multiple real threads
+# reading and writing the same mission's events.yaml/missions.yaml at
+# once): a plain open(path, "w") truncates the file before writing,
+# so a concurrent reader could observe a partial document, and two
+# concurrent writers' read-modify-write cycles could race and drop
+# each other's update. _WRITE_LOCK serializes writers in this
+# process; the temp-file + os.replace() pattern (same one used in
+# orion.runtime.storage and orion.agents.builder.agent) makes each
+# individual write atomic from any reader's point of view, locked or
+# not.
+_WRITE_LOCK = threading.Lock()
+
+
 def _write_yaml(path: Path, data: Any) -> None:
     """Write ``data`` to ``path`` as YAML, creating parent directories."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as fh:
-        yaml.safe_dump(data, fh, allow_unicode=True, sort_keys=False)
+    with _WRITE_LOCK:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fd, tmp_name = tempfile.mkstemp(dir=str(path.parent), prefix=f".{path.name}.", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                yaml.safe_dump(data, fh, allow_unicode=True, sort_keys=False)
+            os.replace(tmp_name, path)
+        except BaseException:
+            try:
+                os.unlink(tmp_name)
+            except OSError:
+                pass
+            raise
 
 
 def mission_dir(mission_id: str) -> Path:

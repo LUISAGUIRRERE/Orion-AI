@@ -34,6 +34,7 @@ from orion.bridge.models import Mission
 from orion.execution import git_manager, task_runner, validation
 from orion.execution.git_manager import GitManagerError
 from orion.execution.workspace import Workspace, WorkspaceError
+from orion.intelligence import services as intelligence_services
 from orion.projects import registry as project_registry
 
 AUTHOR = "Pipeline"
@@ -271,6 +272,28 @@ def run(mission: Mission) -> PipelineResult:
         )
 
     bridge_services.record_event(mission.id, "validation_passed", "Validaciones superadas.", AUTHOR)
+
+    # BETA 008: real Reviewer pass over exactly the files this mission
+    # touched, run *before* commit/PR as the spec asks ("revisar antes
+    # de PR"). Deliberately informational, never a gate: a finding
+    # (even "error" severity) is recorded on the mission's timeline
+    # and in a persisted ReviewReport for a human to read on the PR,
+    # but never flips PipelineResult.success -- doing otherwise would
+    # change BETA 001-007's existing pass/fail semantics for every
+    # already-passing mission type this Sprint does not touch. Wrapped
+    # in try/except for the same reason every other pipeline step
+    # already is: a Reviewer failure must never crash or block a
+    # mission whose actual work already succeeded and validated.
+    try:
+        # intelligence_services.run_review() already records its own
+        # real "review_completed" event (via orion.runtime.events.emit,
+        # which always persists through bridge_services.record_event
+        # first) -- no need to record a second, duplicate event here.
+        intelligence_services.run_review(
+            task_result.files, project_key=mission.project_id or "", mission_id=mission.id
+        )
+    except Exception as exc:  # noqa: BLE001 - reviewing must never crash or block the pipeline
+        bridge_services.record_event(mission.id, "review_failed", str(exc), AUTHOR)
 
     # 5. Commit — only the deliverable files, never the Bridge's own
     # operational data (see GitManager.commit's docstring).

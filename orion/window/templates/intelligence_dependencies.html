@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section id="intelligence-dependencies">
+    <h1>Project Intelligence — Dependencias</h1>
+    <p class="subtitle">Grafo de dependencias real, construido de imports reales (ast). "Que se rompe si cambio esto".</p>
+
+    <form method="get" action="/intelligence/dependencies" class="new-mission-form">
+        <label>Proyecto
+            <select name="project_id">
+                {% for choice in project_choices %}
+                <option value="{{ choice }}" {% if choice == project_id %}selected{% endif %}>{{ choice or "ORION-AI (self)" }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>Modulo o archivo
+            <input type="text" name="impacted_by" placeholder="orion/executor/services.py" value="{{ impacted_by }}">
+        </label>
+        <button class="btn-primary" type="submit">¿Que depende de esto?</button>
+    </form>
+
+    {% if impacted_by %}
+    <div class="card" style="max-width: 900px;">
+        <div class="card-header"><span class="card-name">Impactados por '{{ resolved_module or impacted_by }}'</span></div>
+        {% if impacted is none or resolved_module is none %}
+        <div class="card-row"><span>No se encontro un modulo real para '{{ impacted_by }}'.</span></div>
+        {% elif impacted %}
+        {% for name in impacted %}
+        <div class="card-row"><span class="label">{{ name }}</span><span>{{ graph.module_paths.get(name, "") }}</span></div>
+        {% endfor %}
+        {% else %}
+        <div class="card-row"><span>Nada depende de este modulo (directa o transitivamente).</span></div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <h2>Modulos indexados ({{ graph.module_paths|length }})</h2>
+    <table class="events-table">
+        <thead><tr><th>Modulo</th><th>Archivo</th></tr></thead>
+        <tbody>
+        {% for name, path in graph.module_paths.items()|sort %}
+        <tr><td>{{ name }}</td><td>{{ path }}</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    <p style="margin-top: 1.5rem;"><a href="/intelligence?project_id={{ project_id }}">← Proyecto</a></p>
+</section>
+{% endblock %}

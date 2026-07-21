@@ -14,6 +14,7 @@ from orion.agents.coo import metrics as coo_metrics
 from orion.bridge import services as bridge_services
 from orion.execution import pipeline as execution_pipeline
 from orion.experience import knowledge_store, storage as experience_storage
+from orion.intelligence import services as intelligence_services
 from orion.projects import registry as project_registry
 from orion.projects import services as project_services
 from orion.window import services
@@ -147,3 +148,133 @@ async def api_business_detail(name: str) -> BusinessUnit:
 async def api_events(limit: int = 50) -> list[Event]:
     """Return the most recent events as JSON."""
     return services.get_events(limit=limit)
+
+
+# ---------------------------------------------------------------------------
+# BETA 008: Project Intelligence pages. Deliberately call
+# orion.intelligence.services directly (never orion.intelligence.routes'
+# JSON API internally) -- the exact same convention every other page
+# above already follows: HTML pages call the owning subsystem's
+# services module directly, while a separate JSON API router (mounted
+# in orion.window.app) exists in parallel for external consumers.
+# ---------------------------------------------------------------------------
+
+
+def _project_choices() -> list[str]:
+    """Every project_key a person could sensibly pick from this
+    dropdown: ORION-AI's own checkout, plus every registered Project."""
+    return [""] + [p.project_id for p in project_registry.list_projects()]
+
+
+@pages_router.get("/intelligence", response_class=HTMLResponse)
+async def intelligence_index_page(request: Request, project_id: str = "") -> HTMLResponse:
+    """Proyecto: a real, freshly (incrementally) analyzed summary of
+    the selected project -- languages, frameworks, entrypoints, TODOs,
+    purpose breakdown."""
+    index = intelligence_services.analyze_project(project_id)
+    context = {
+        "project_id": project_id,
+        "project_choices": _project_choices(),
+        "index": index,
+        "profile": index.profile,
+        **_topbar_context(),
+    }
+    return templates.TemplateResponse(request, "intelligence_index.html", context)
+
+
+@pages_router.get("/intelligence/architecture", response_class=HTMLResponse)
+async def intelligence_architecture_page(request: Request, project_id: str = "") -> HTMLResponse:
+    """Arquitectura / Mapa: the live architecture tree, built fresh
+    from the current index every time this page is requested."""
+    tree = intelligence_services.get_architecture_map(project_id)
+    context = {
+        "project_id": project_id,
+        "project_choices": _project_choices(),
+        "tree": tree,
+        **_topbar_context(),
+    }
+    return templates.TemplateResponse(request, "intelligence_architecture.html", context)
+
+
+@pages_router.get("/intelligence/dependencies", response_class=HTMLResponse)
+async def intelligence_dependencies_page(
+    request: Request, project_id: str = "", impacted_by: str = ""
+) -> HTMLResponse:
+    """Dependencias: the real dependency graph, with an optional real
+    "what depends on this" query (DependencyGraph.impacted_by)."""
+    graph = intelligence_services.get_dependency_graph(project_id)
+    impacted: list[str] | None = None
+    resolved_module: str | None = None
+    if impacted_by:
+        resolved_module = graph.module_for_path(impacted_by) if ("/" in impacted_by or impacted_by.endswith(".py")) else impacted_by
+        impacted = graph.impacted_by(resolved_module) if resolved_module else []
+    context = {
+        "project_id": project_id,
+        "project_choices": _project_choices(),
+        "graph": graph,
+        "impacted_by": impacted_by,
+        "resolved_module": resolved_module,
+        "impacted": impacted,
+        **_topbar_context(),
+    }
+    return templates.TemplateResponse(request, "intelligence_dependencies.html", context)
+
+
+@pages_router.get("/intelligence/impact", response_class=HTMLResponse)
+async def intelligence_impact_page(request: Request, project_id: str = "", paths: str = "") -> HTMLResponse:
+    """Impacto: a real pre-modification Impact Analysis over one or
+    more repo-relative paths, submitted one per line."""
+    path_list = [p.strip() for p in paths.splitlines() if p.strip()]
+    report = intelligence_services.compute_impact(path_list, project_key=project_id) if path_list else None
+    context = {
+        "project_id": project_id,
+        "project_choices": _project_choices(),
+        "paths_raw": paths,
+        "report": report,
+        **_topbar_context(),
+    }
+    return templates.TemplateResponse(request, "intelligence_impact.html", context)
+
+
+@pages_router.get("/intelligence/plan", response_class=HTMLResponse)
+async def intelligence_plan_page(request: Request, project_id: str = "", plan_request: str = "") -> HTMLResponse:
+    """Plan: the rule-based Task Planner's real decomposition of a
+    natural-language request into one or more Missions."""
+    plan = intelligence_services.plan_request(plan_request, project_key=project_id) if plan_request.strip() else None
+    context = {
+        "project_id": project_id,
+        "project_choices": _project_choices(),
+        "plan_request": plan_request,
+        "plan": plan,
+        **_topbar_context(),
+    }
+    return templates.TemplateResponse(request, "intelligence_plan.html", context)
+
+
+@pages_router.get("/intelligence/review", response_class=HTMLResponse)
+async def intelligence_review_page(request: Request, project_id: str = "", paths: str = "") -> HTMLResponse:
+    """Revisión: a real Reviewer pass (syntax/imports/docstrings/
+    naming/security/secrets) over one or more repo-relative paths."""
+    path_list = [p.strip() for p in paths.splitlines() if p.strip()]
+    report = intelligence_services.run_review(path_list, project_key=project_id) if path_list else None
+    context = {
+        "project_id": project_id,
+        "project_choices": _project_choices(),
+        "paths_raw": paths,
+        "report": report,
+        **_topbar_context(),
+    }
+    return templates.TemplateResponse(request, "intelligence_review.html", context)
+
+
+@pages_router.get("/intelligence/knowledge-graph", response_class=HTMLResponse)
+async def intelligence_knowledge_graph_page(request: Request) -> HTMLResponse:
+    """Knowledge Graph: ORION's single, global, ever-growing model of
+    its own operational schema plus every project component it has
+    ever touched."""
+    graph = intelligence_services.get_knowledge_graph()
+    context = {
+        "graph": graph,
+        **_topbar_context(),
+    }
+    return templates.TemplateResponse(request, "intelligence_knowledge_graph.html", context)
