@@ -1,19 +1,43 @@
-"""The AI Board's six seats, as data -- never a new role, never a new
-agent. ``.ai/BOARD.md`` and ``.ai/ROLES.md`` already define who Luis
-Aguirre, ChatGPT, Claude, Jules, Nemotron, and AutoClaw are and what
-each may and may not do; this module only *names* the stage of a
-Mission each of them is real-world responsible for, and points at the
+"""The AI Board's six Mission-pipeline stages, as data -- never a new
+role, never a new agent. This module only *names* the stage of a
+Mission each stage is real-world responsible for, and points at the
 ORION-AI module that already, today, performs that stage's actual
 work -- so "que miembro participa en cada etapa" has one real answer
 instead of an invented one.
 
-Deliberate, disclosed gap: QA has no dedicated AI Board seat in
-``.ai/ROLES.md`` today -- it is an automated gate (orion.execution.
-validation), not a person or persona. Rather than inventing a seventh
-Board member to fill that gap (which B-011's own "NO crear nuevos
-roles" forbids), QA is registered here with ``board_seat=None`` and a
-short, honest note. Everything else in this module mirrors a seat that
-already exists in ``.ai/ROLES.md``.
+G-012 REMEDIATION (after Codex REQUEST CHANGES): this module used to
+hold a second, hardcoded copy of Board member names/roles as a
+"fallback" whenever ``.ai/board.yaml`` failed to load, and cached the
+resolved result once at import time for the life of the process.
+Codex correctly flagged both as real problems:
+
+  HIGH #1 -- a hardcoded fallback name/role *is* a second operational
+  source of truth, even if the strings started out identical to
+  board.yaml's. If board.yaml cannot be loaded, this module must not
+  fabricate an identity: it now returns an explicit, structured
+  failure (``board_seat=None`` + ``board_seat_error=<message>``)
+  instead.
+
+  HIGH #2 -- a module-level snapshot loaded once at import time means
+  every consumer for the rest of the process's life sees whatever
+  board.yaml looked like at import time, not its current content.
+  There is now no cross-call cache anywhere in this module:
+  ``get_member()``/``list_members()`` resolve the seat label fresh,
+  every single call, directly against ``orion.board.canonical``.
+
+This also cleanly separates two concerns Codex named directly:
+*pipeline structure* (which stage exists, what real module implements
+it, which events indicate it ran -- all static B-011 facts, entirely
+independent of board.yaml) from *Board membership* (who currently
+holds that seat, per ``.ai/board.yaml`` -- resolved fresh, never
+baked into the static pipeline data).
+
+Deliberate, disclosed gap: QA and Experience have no dedicated AI
+Board seat in ``.ai/board.yaml`` today -- they are automated gates/
+systems (orion.execution.validation, orion.experience.services), not
+people or personas. Rather than inventing seats for them (which
+B-011's own "NO crear nuevos roles" forbids), their
+``board_seat_member_ids`` is simply empty.
 
 ``event_signatures`` are real, already-emitted event *types* (see
 orion.agents.builder.agent, orion.execution.pipeline,
@@ -24,57 +48,40 @@ history to derive real progress, never a fabricated status.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from orion.board import canonical
-
-# MISSION G-012 (Single Source of Truth): board_seat labels below used
-# to be hardcoded strings duplicating .ai/BOARD.md/.ai/ROLES.md by
-# hand. They are now derived from .ai/board.yaml (see
-# orion.board.canonical), with the exact original strings kept as a
-# fallback if the canonical file cannot be loaded for any reason (a
-# missing/corrupted .ai/board.yaml must never break every consumer of
-# this module -- Governance, Runtime, the CLI, the API, the Window --
-# only `orion board validate` should ever surface that as a real
-# error). Real drift between the fallback and the canonical file would
-# itself be caught by tests/test_board_canonical.py.
-try:
-    _CANONICAL_BOARD = canonical.load_board_config()
-except canonical.BoardConfigurationError:
-    _CANONICAL_BOARD = None
-
-
-def _seat_label(member_id: str, fallback: str) -> str:
-    if _CANONICAL_BOARD is not None:
-        member = _CANONICAL_BOARD.get(member_id)
-        if member is not None:
-            return member.seat_label()
-    return fallback
-
-
-def _composite_seat_label(member_ids: tuple[str, ...], fallback: str) -> str:
-    if _CANONICAL_BOARD is not None:
-        labels = [m.seat_label() for mid in member_ids if (m := _CANONICAL_BOARD.get(mid)) is not None]
-        if len(labels) == len(member_ids):
-            return " / ".join(labels)
-    return fallback
 
 
 @dataclass(frozen=True)
 class BoardMember:
     key: str
     display_name: str
-    board_seat: str | None
+    # References into .ai/board.yaml's member ids -- never a resolved
+    # string baked in at definition time. Empty means "no dedicated
+    # AI Board seat" (QA, Experience), the same disclosed gap as
+    # before, now structural rather than a bare ``None`` with no
+    # record of *why*.
+    board_seat_member_ids: tuple[str, ...]
     implemented_by: str
     description: str
     event_signatures: tuple[str, ...]
+    # Resolved fresh by get_member()/list_members() on every call --
+    # never set directly, never cached across calls. ``board_seat`` is
+    # the human-readable label when resolution succeeded (or None if
+    # this stage has no dedicated seat, or resolution failed).
+    # ``board_seat_error`` is the real, undecorated error message when
+    # resolution was attempted and failed -- never fabricated text
+    # standing in for a name.
+    board_seat: str | None = None
+    board_seat_error: str | None = None
 
 
-MEMBERS: dict[str, BoardMember] = {
+_TEMPLATES: dict[str, BoardMember] = {
     "architect": BoardMember(
         key="architect",
         display_name="Architect",
-        board_seat=_composite_seat_label(("chatgpt", "claude"), "ChatGPT (Chief AI Architect) / Claude (Chief Software Architect)"),
+        board_seat_member_ids=("chatgpt", "claude"),
         implemented_by="orion.business.services (Business Brain) + orion.intelligence.services (Project Intelligence)",
         description=(
             "Entiende el pedido en el contexto real del negocio y del "
@@ -96,7 +103,7 @@ MEMBERS: dict[str, BoardMember] = {
     "builder": BoardMember(
         key="builder",
         display_name="Builder",
-        board_seat=_seat_label("jules", "Jules (Lead Software Engineer)"),
+        board_seat_member_ids=("jules",),
         implemented_by="orion.agents.builder.agent + orion.execution.pipeline (Executor step)",
         description=(
             "Implementa unicamente lo ya aprobado -- exactamente lo que "
@@ -115,7 +122,7 @@ MEMBERS: dict[str, BoardMember] = {
     "reviewer": BoardMember(
         key="reviewer",
         display_name="Reviewer",
-        board_seat=_seat_label("nemotron", "Nemotron (Principal Engineering Reviewer)"),
+        board_seat_member_ids=("nemotron",),
         implemented_by="orion.intelligence.reviewer (via orion.intelligence.services.run_review)",
         description=(
             "Revisa el trabajo ya hecho, nunca lo suyo propio -- la "
@@ -128,21 +135,21 @@ MEMBERS: dict[str, BoardMember] = {
     "qa": BoardMember(
         key="qa",
         display_name="QA",
-        board_seat=None,
+        board_seat_member_ids=(),
         implemented_by="orion.execution.validation",
         description=(
             "Compuerta automatica de validacion (no es una persona ni "
-            "un miembro del AI Board en .ai/ROLES.md hoy -- se registra "
-            "aqui con board_seat=None en vez de inventar un septimo "
-            "asiento, que B-011 prohibe explicitamente). El codigo real "
-            "es el paso de Validation del Pipeline."
+            "un miembro del AI Board hoy -- se registra aqui sin "
+            "asiento en vez de inventar un septimo, que B-011 prohibe "
+            "explicitamente). El codigo real es el paso de Validation "
+            "del Pipeline."
         ),
         event_signatures=("validation_started", "validation_passed", "validation_failed"),
     ),
     "gitops": BoardMember(
         key="gitops",
         display_name="GitOps",
-        board_seat=_seat_label("autoclaw", "AutoClaw (Operations Engineer)"),
+        board_seat_member_ids=("autoclaw",),
         implemented_by="orion.execution.git_manager (via orion.execution.pipeline)",
         description=(
             "Automatiza rama/commit/push/PR -- exactamente el rol "
@@ -155,14 +162,13 @@ MEMBERS: dict[str, BoardMember] = {
     "experience": BoardMember(
         key="experience",
         display_name="Experience",
-        board_seat=None,
+        board_seat_member_ids=(),
         implemented_by="orion.experience.services (Experience Engine)",
         description=(
             "Cierra toda mission con un aprendizaje persistido -- no "
-            "tiene asiento humano/IA propio en .ai/ROLES.md (es un "
-            "sistema, igual que QA), y se registra asi en vez de "
-            "inventarle uno. El codigo real es el Experience Engine de "
-            "BETA 004."
+            "tiene asiento humano/IA propio (es un sistema, igual que "
+            "QA), y se registra asi en vez de inventarle uno. El "
+            "codigo real es el Experience Engine de BETA 004."
         ),
         event_signatures=(
             "experience_generated",
@@ -176,9 +182,49 @@ MEMBERS: dict[str, BoardMember] = {
 ALL_KEYS: tuple[str, ...] = ("architect", "builder", "reviewer", "qa", "gitops", "experience")
 
 
+def _resolve_seat(template: BoardMember) -> BoardMember:
+    """Resolves ``board_seat`` fresh against the canonical source --
+    never cached, never fabricated. Called anew on every
+    get_member()/list_members() invocation, so every consumer always
+    sees the current, on-disk .ai/board.yaml, not a stale snapshot."""
+    if not template.board_seat_member_ids:
+        return template  # no dedicated seat by design -- not a failure
+
+    try:
+        config = canonical.load_board_config()
+    except canonical.BoardConfigurationError as exc:
+        return replace(template, board_seat=None, board_seat_error=str(exc))
+
+    labels: list[str] = []
+    missing: list[str] = []
+    for member_id in template.board_seat_member_ids:
+        member = config.get(member_id)
+        if member is None:
+            missing.append(member_id)
+        else:
+            labels.append(member.seat_label())
+
+    if missing:
+        return replace(
+            template,
+            board_seat=None,
+            board_seat_error=f"canonical board.yaml has no member(s) with id(s): {', '.join(missing)}",
+        )
+
+    return replace(template, board_seat=" / ".join(labels), board_seat_error=None)
+
+
 def get_member(key: str) -> BoardMember:
-    return MEMBERS[key]
+    return _resolve_seat(_TEMPLATES[key])
 
 
 def list_members() -> list[BoardMember]:
-    return [MEMBERS[k] for k in ALL_KEYS]
+    return [_resolve_seat(_TEMPLATES[k]) for k in ALL_KEYS]
+
+
+# Backward-compatible name: a dict of the *static pipeline templates*
+# (key, display_name, implemented_by, description, event_signatures,
+# board_seat_member_ids) -- never resolved seat data, since that must
+# never be a fixed, cached snapshot (HIGH #2). Anything that needs the
+# current resolved board_seat must call get_member()/list_members().
+MEMBERS: dict[str, BoardMember] = dict(_TEMPLATES)
