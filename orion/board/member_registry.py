@@ -25,6 +25,19 @@ Codex correctly flagged both as real problems:
   ``get_member()``/``list_members()`` resolve the seat label fresh,
   every single call, directly against ``orion.board.canonical``.
 
+G-012 REMEDIATION ROUND 2 (after Codex's second REQUEST CHANGES, HIGH
+#2 remaining): the first remediation still had ``list_members()``
+call ``canonical.load_board_config()`` once *per template* (six
+separate loads), so a single response could in principle mix labels
+resolved against two different on-disk revisions of ``board.yaml`` if
+it changed mid-call. ``list_members()`` now loads exactly ONE
+``BoardConfiguration`` at the start of the call and resolves every
+template against that single instance -- coherent by construction,
+still with zero caching across calls (the loaded config is a local
+variable, never stored anywhere), and still no import-time snapshot.
+``get_member()`` only ever resolves one template, so "load once per
+operation" and "load once per call" already coincide for it.
+
 This also cleanly separates two concerns Codex named directly:
 *pipeline structure* (which stage exists, what real module implements
 it, which events indicate it ran -- all static B-011 facts, entirely
@@ -182,18 +195,19 @@ _TEMPLATES: dict[str, BoardMember] = {
 ALL_KEYS: tuple[str, ...] = ("architect", "builder", "reviewer", "qa", "gitops", "experience")
 
 
-def _resolve_seat(template: BoardMember) -> BoardMember:
-    """Resolves ``board_seat`` fresh against the canonical source --
-    never cached, never fabricated. Called anew on every
-    get_member()/list_members() invocation, so every consumer always
-    sees the current, on-disk .ai/board.yaml, not a stale snapshot."""
+def _resolve_seat(template: BoardMember, config: canonical.BoardConfiguration) -> BoardMember:
+    """Resolves ``board_seat`` for one template against an *already
+    loaded* ``BoardConfiguration`` -- never loads anything itself.
+
+    G-012 REMEDIATION ROUND 2 (after Codex's second REQUEST CHANGES,
+    HIGH #2 remaining): the caller is responsible for loading exactly
+    one ``BoardConfiguration`` for the whole operation and passing it
+    in here, so that every member resolved within a single
+    get_member()/list_members() call is checked against the *same*
+    canonical revision -- never a mix of two different on-disk
+    revisions read at two different instants."""
     if not template.board_seat_member_ids:
         return template  # no dedicated seat by design -- not a failure
-
-    try:
-        config = canonical.load_board_config()
-    except canonical.BoardConfigurationError as exc:
-        return replace(template, board_seat=None, board_seat_error=str(exc))
 
     labels: list[str] = []
     missing: list[str] = []
@@ -214,12 +228,64 @@ def _resolve_seat(template: BoardMember) -> BoardMember:
     return replace(template, board_seat=" / ".join(labels), board_seat_error=None)
 
 
+def _resolve_seat_with_fresh_load(template: BoardMember) -> BoardMember:
+    """Loads the canonical configuration fresh (no cache anywhere) and
+    resolves a single template against it. Used by get_member(), which
+    only ever needs to resolve one template per call, so "load once
+    for the whole operation" and "load once per call" coincide."""
+    if not template.board_seat_member_ids:
+        return template  # no dedicated seat by design -- not a failure
+
+    try:
+        config = canonical.load_board_config()
+    except canonical.BoardConfigurationError as exc:
+        return replace(template, board_seat=None, board_seat_error=str(exc))
+
+    return _resolve_seat(template, config)
+
+
 def get_member(key: str) -> BoardMember:
-    return _resolve_seat(_TEMPLATES[key])
+    return _resolve_seat_with_fresh_load(_TEMPLATES[key])
 
 
 def list_members() -> list[BoardMember]:
-    return [_resolve_seat(_TEMPLATES[k]) for k in ALL_KEYS]
+    """Resolves all six pipeline-stage templates against exactly ONE
+    canonical revision.
+
+    G-012 REMEDIATION ROUND 2 (HIGH #2 remaining): Codex correctly
+    found that the previous version called ``_resolve_seat()`` once
+    per template, each call independently invoking
+    ``canonical.load_board_config()`` -- so if ``.ai/board.yaml``
+    changed on disk *during* a single ``list_members()`` call (e.g. a
+    concurrent ``orion board generate`` or a hand-edit landing
+    mid-call), the response could mix labels resolved against two
+    different revisions of the file. There is still no cache of any
+    kind (no module-level variable survives across calls -- that
+    would reintroduce the HIGH #2 import-time-snapshot problem this
+    module already fixed once): ``load_board_config()`` is called
+    exactly once, right here, at the start of this function, and its
+    single result is reused for every template resolved in this
+    response. The next call to ``list_members()`` loads again, fresh,
+    and may see a newer revision -- no ``importlib.reload()`` needed,
+    because nothing was ever cached to begin with.
+
+    If the load itself fails, every templated seat gets the same
+    explicit, real error (never a fabricated identity) -- templates
+    with no dedicated seat (QA/Experience) still pass through
+    unaffected, exactly as get_member() would return them."""
+    templates = [_TEMPLATES[k] for k in ALL_KEYS]
+
+    try:
+        config = canonical.load_board_config()
+    except canonical.BoardConfigurationError as exc:
+        return [
+            template
+            if not template.board_seat_member_ids
+            else replace(template, board_seat=None, board_seat_error=str(exc))
+            for template in templates
+        ]
+
+    return [_resolve_seat(template, config) for template in templates]
 
 
 # Backward-compatible name: a dict of the *static pipeline templates*

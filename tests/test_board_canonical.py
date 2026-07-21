@@ -347,6 +347,117 @@ class MemberRegistryIntegrationTests(unittest.TestCase):
             self.assertIsNone(template.board_seat, f"MEMBERS['{key}'] must not hold a resolved seat")
             self.assertIsNone(template.board_seat_error)
 
+    def test_list_members_loads_canonical_config_exactly_once_per_call(self) -> None:
+        """G-012 REMEDIATION ROUND 2 (HIGH #2 remaining, per Codex's
+        second REQUEST CHANGES): list_members() must load exactly ONE
+        BoardConfiguration per invocation -- never once per template
+        (six loads) -- so every member in a single response is checked
+        against the same canonical revision."""
+        from orion.board import member_registry as mr
+
+        real_config = load_board_config()
+        call_count = {"n": 0}
+        original_loader = canonical.load_board_config
+
+        def counting_loader(*a, **kw):
+            call_count["n"] += 1
+            return real_config
+
+        canonical.load_board_config = counting_loader
+        try:
+            members = mr.list_members()
+            self.assertEqual(call_count["n"], 1, "list_members() must load exactly once, not once per template")
+            self.assertEqual(len(members), 6)
+        finally:
+            canonical.load_board_config = original_loader
+
+    def test_list_members_never_mixes_two_canonical_revisions(self) -> None:
+        """Adversarial A/B alternating loader (per Codex's exact
+        prescription): builds two full, self-consistent
+        BoardConfigurations differing only by a tag suffix on every
+        display_name/role, and an alternating loader that returns A on
+        the 1st call, B on the 2nd, A on the 3rd, etc. A single
+        list_members() call must load exactly once, so every resolved
+        label in ITS response must belong entirely to A or entirely to
+        B -- never a mix. A second, independent list_members() call
+        may reflect the next revision with no importlib.reload()
+        anywhere in this test."""
+        from orion.board import member_registry as mr
+        from orion.board.canonical import BoardConfiguration, CanonicalBoardMember
+
+        def _build(tag: str) -> BoardConfiguration:
+            ids = ["luis-aguirre", "chatgpt", "claude", "jules", "nemotron", "autoclaw"]
+            members = tuple(
+                CanonicalBoardMember(
+                    id=member_id,
+                    display_name=f"{member_id}-{tag}",
+                    role=f"role-{tag}",
+                    status="active",
+                    responsibilities=(),
+                    restrictions=(),
+                    capabilities=(),
+                    documentation_path=None,
+                    supersedes=None,
+                )
+                for member_id in ids
+            )
+            return BoardConfiguration(schema_version=1, board_version=1, members=members)
+
+        config_a = _build("A")
+        config_b = _build("B")
+        sequence = [config_a, config_b, config_a, config_b]
+        call_count = {"n": 0}
+        original_loader = canonical.load_board_config
+
+        def alternating_loader(*a, **kw):
+            result = sequence[call_count["n"] % len(sequence)]
+            call_count["n"] += 1
+            return result
+
+        canonical.load_board_config = alternating_loader
+        try:
+            first = mr.list_members()
+            self.assertEqual(call_count["n"], 1, "first list_members() call must load exactly once")
+
+            labels_first = {m.board_seat for m in first if m.board_seat is not None}
+            self.assertTrue(labels_first, "at least architect/builder/reviewer/gitops must resolve a label")
+            self.assertTrue(
+                all("-A" in label for label in labels_first) or all("-B" in label for label in labels_first),
+                f"a single list_members() response must never mix revisions: {labels_first}",
+            )
+
+            second = mr.list_members()
+            self.assertEqual(call_count["n"], 2, "second list_members() call must load exactly once more")
+            labels_second = {m.board_seat for m in second if m.board_seat is not None}
+            self.assertTrue(all("-B" in label for label in labels_second), labels_second)
+            self.assertNotEqual(labels_first, labels_second, "second call must reflect the next revision, no caching")
+        finally:
+            canonical.load_board_config = original_loader
+
+    def test_list_members_coherent_failure_when_load_fails(self) -> None:
+        """If the single load at the start of list_members() fails,
+        every templated seat that needs a canonical lookup must report
+        the SAME explicit error -- never a partially-resolved mix of
+        some real labels and some fabricated/absent ones."""
+        from orion.board import member_registry as mr
+
+        original_loader = canonical.load_board_config
+        canonical.load_board_config = lambda *a, **kw: (_ for _ in ()).throw(
+            BoardConfigurationError("simulated failure inside list_members")
+        )
+        try:
+            members = mr.list_members()
+            by_key = {m.key: m for m in members}
+            for key in ("architect", "builder", "reviewer", "gitops"):
+                self.assertIsNone(by_key[key].board_seat)
+                self.assertIn("simulated failure inside list_members", by_key[key].board_seat_error)
+            # QA/Experience have no dedicated seat by design -- not a
+            # resolution failure, so no error should be attached.
+            self.assertIsNone(by_key["qa"].board_seat_error)
+            self.assertIsNone(by_key["experience"].board_seat_error)
+        finally:
+            canonical.load_board_config = original_loader
+
 
 class GeneratorTests(unittest.TestCase):
     """Uses disposable temp-file copies for every write/drift test --
