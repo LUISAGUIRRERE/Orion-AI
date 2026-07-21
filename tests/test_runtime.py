@@ -37,7 +37,7 @@ from pathlib import Path
 
 from orion.bridge import services as bridge_services
 from orion.bridge import storage as bridge_storage
-from orion.bridge.models import MissionStatus
+from orion.bridge.models import MissionCreate, MissionStatus
 from orion.executor.adapters.base import ProviderAdapter
 from orion.executor.models import AdapterHealth
 from orion.executor.registry import register_adapter
@@ -406,6 +406,74 @@ class SchedulerTests(IsolatedRuntimeTestCase):
             ]
             self.assertEqual(len(claimed_events), 1)
         self.assertEqual(total_processed, len(mission_ids))
+
+
+# ---------------------------------------------------------------------------
+# Mission listing race (fix applied during RELEASE 0.9.0-beta, FASE 2)
+# ---------------------------------------------------------------------------
+
+
+class MissionListingRaceTests(IsolatedRuntimeTestCase):
+    """Regression coverage for the real race found while hardening the
+    Runtime for release: orion.bridge.services.list_missions() used to
+    do ``Mission(**storage.read_mission(mid))`` directly. Under
+    concurrent workers, a mission's file can transiently be unreadable
+    between storage.list_mission_ids() and storage.read_mission(mid),
+    in which case read_mission() honestly returns None -- and
+    Mission(**None) raised TypeError, crashing the worker thread
+    (test_concurrent_workers_each_process_a_distinct_mission_exactly_once
+    above reproduced this intermittently under full-suite CPU
+    contention). list_missions() must skip an unreadable mission
+    instead of crashing on it.
+    """
+
+    def test_list_missions_never_raises_typeerror_when_a_file_is_unreadable(self) -> None:
+        good = bridge_services.create_mission(MissionCreate(title="Real mission A"))
+        bridge_services.create_mission(MissionCreate(title="Real mission B"))
+
+        # Simulate the exact race: the id is still returned by
+        # list_mission_ids() (the directory/mission.yaml exists), but
+        # read_mission() cannot produce data for it right now -- the
+        # same honest-None contract storage.read_mission() already
+        # has for a missing/mid-write file.
+        original_read_mission = bridge_storage.read_mission
+
+        def _flaky_read_mission(mission_id: str):
+            if mission_id == good.id:
+                return None
+            return original_read_mission(mission_id)
+
+        bridge_storage.read_mission = _flaky_read_mission
+        try:
+            missions = bridge_services.list_missions()
+        except TypeError:
+            self.fail("list_missions() raised TypeError instead of skipping the unreadable mission")
+        finally:
+            bridge_storage.read_mission = original_read_mission
+
+        self.assertNotIn(good.id, [m.id for m in missions])
+
+    def test_list_missions_keeps_every_other_valid_mission(self) -> None:
+        unreadable = bridge_services.create_mission(MissionCreate(title="Will go unreadable"))
+        keep_a = bridge_services.create_mission(MissionCreate(title="Keep A"))
+        keep_b = bridge_services.create_mission(MissionCreate(title="Keep B"))
+
+        original_read_mission = bridge_storage.read_mission
+
+        def _flaky_read_mission(mission_id: str):
+            if mission_id == unreadable.id:
+                return None
+            return original_read_mission(mission_id)
+
+        bridge_storage.read_mission = _flaky_read_mission
+        try:
+            missions = bridge_services.list_missions()
+        finally:
+            bridge_storage.read_mission = original_read_mission
+
+        returned_ids = {m.id for m in missions}
+        self.assertEqual(returned_ids, {keep_a.id, keep_b.id})
+        self.assertEqual(len(missions), 2)
 
 
 # ---------------------------------------------------------------------------

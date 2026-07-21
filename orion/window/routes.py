@@ -15,6 +15,7 @@ from orion.bridge import services as bridge_services
 from orion.execution import pipeline as execution_pipeline
 from orion.experience import knowledge_store, storage as experience_storage
 from orion.business import services as business_services
+from orion.governance import services as governance_services
 from orion.intelligence import services as intelligence_services
 from orion.projects import registry as project_registry
 from orion.projects import services as project_services
@@ -316,3 +317,28 @@ async def company_dashboard_page(request: Request, company_id: str) -> HTMLRespo
         **_topbar_context(),
     }
     return templates.TemplateResponse(request, "company_dashboard.html", context)
+
+
+# ---------------------------------------------------------------------------
+# BETA 010: Governance page. One page covering every section this
+# Sprint's own WINDOW list asks for -- Governance/Policies/Risk/
+# Confidence/Audit/Execution Mode/Approval Queue -- same "single real
+# Dashboard" convention the Business Brain company page already
+# established, rather than seven separate near-empty pages.
+# ---------------------------------------------------------------------------
+
+
+@pages_router.get("/governance", response_class=HTMLResponse)
+async def governance_page(request: Request) -> HTMLResponse:
+    mode_profile = governance_services.get_mode_profile()
+    context = {
+        "mode_profile": mode_profile,
+        "mode_history": list(reversed(governance_services.execution_mode_module.get_mode_history()))[:20],
+        "policies": governance_services.describe_policies(),
+        "pending_approvals": governance_services.list_pending_approvals(),
+        "all_approvals": list(reversed(governance_services.approval_engine.list_all()))[:30],
+        "audit_entries": list(reversed(governance_services.list_audit()))[:30],
+        "rollbacks": governance_services.rollback.list_rollbacks(),
+        **_topbar_context(),
+    }
+    return templates.TemplateResponse(request, "governance.html", context)

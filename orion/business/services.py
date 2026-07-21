@@ -40,6 +40,7 @@ from orion.business.planner import BusinessContext, ResolvedContext
 from orion.business.project import BusinessProject
 from orion.business.roadmap import RoadmapItem
 from orion.intelligence import services as intelligence_services
+from orion.intelligence.services import IntelligenceBrief
 from orion.projects import registry as project_registry
 
 AUTHOR = "BusinessBrain"
@@ -330,6 +331,14 @@ class BusinessBrief:
     risk: str = "desconocido"
     plan_steps: int = 0
     intelligence_available: bool = False
+    # BETA 010 (Governance): the real IntelligenceBrief this brief's
+    # own resolve_context() already computed, when it computed one --
+    # never a second call. Optional/None for the unresolved case and
+    # for the no-real-repo branch (which only calls plan_request(),
+    # not prepare_request(), so no ImpactReport exists yet). Consumed
+    # by orion.governance.services.evaluate_change() so Risk Engine
+    # never has to re-derive impact data itself.
+    intelligence_brief: "IntelligenceBrief | None" = None
     generated_at: str = field(default_factory=_now_iso)
 
     def to_dict(self) -> dict:
@@ -409,11 +418,13 @@ def resolve_context(request: str, mission_id: str | None = None) -> BusinessBrie
     intelligence_available = False
     technical_project_id = context.technical_project_id
 
+    intelligence_brief_obj: "IntelligenceBrief | None" = None
     if _has_real_repo(technical_project_id):
         brief = intelligence_services.prepare_request(request, project_key=technical_project_id, mission_id=mission_id)
         risk = brief.impact.risk
         plan_steps = len(brief.plan.steps)
         intelligence_available = True
+        intelligence_brief_obj = brief
     else:
         plan = intelligence_services.plan_request(
             request, project_key=(technical_project_id or ""), mission_id=mission_id
@@ -424,6 +435,7 @@ def resolve_context(request: str, mission_id: str | None = None) -> BusinessBrie
     return BusinessBrief(
         request=request, resolved=resolved, context=context, objective=objective,
         risk=risk, plan_steps=plan_steps, intelligence_available=intelligence_available,
+        intelligence_brief=intelligence_brief_obj,
     )
 
 

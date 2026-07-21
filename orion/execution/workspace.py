@@ -62,6 +62,12 @@ RUNTIME_PATHS: tuple[str, ...] = (
     # first time a Mission ran after Business Brain data existed on
     # disk -- see BETA 009's commit message for the full trace.
     "workspace/business_brain/",
+    # BETA 010 (Governance): the Governance module's own execution
+    # mode / audit log / approval queue / rollback records
+    # (workspace/governance/) -- added proactively this time (the same
+    # omission bit BETA 009 for workspace/business_brain/, which itself
+    # repeated BETA 008's original workspace/intelligence/ mistake).
+    "workspace/governance/",
 )
 
 

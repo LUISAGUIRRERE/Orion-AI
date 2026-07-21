@@ -412,6 +412,92 @@ def cmd_knowledge(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_policy(args: argparse.Namespace) -> int:
+    from orion.governance import services as governance_services
+
+    for rule in governance_services.describe_policies():
+        print(f"[{rule['categoria']:>10}] {rule['rule']}")
+    return 0
+
+
+def cmd_risk(args: argparse.Namespace) -> int:
+    from orion.governance import services as governance_services
+
+    evaluation = governance_services.evaluate_change(args.request, project_id=args.project or "")
+    print(evaluation.risk.to_dict())
+    return 0
+
+
+def cmd_confidence(args: argparse.Namespace) -> int:
+    from orion.governance import services as governance_services
+
+    evaluation = governance_services.evaluate_change(args.request, project_id=args.project or "")
+    print(evaluation.confidence.to_dict())
+    return 0
+
+
+def cmd_approve(args: argparse.Namespace) -> int:
+    from orion.governance import services as governance_services
+
+    if args.list:
+        pending = governance_services.list_pending_approvals()
+        if not pending:
+            print("No hay aprobaciones pendientes.")
+            return 0
+        for entry in pending:
+            print(f"{entry['id']}  [{entry['category']}] {entry['request']}  (riesgo={entry['risk_level']})")
+        return 0
+
+    if not args.request_id:
+        print("Se requiere --request-id (o usa --list para ver pendientes).")
+        return 1
+
+    if args.reject:
+        result = governance_services.reject_request(args.request_id, approver=args.approver, notes=args.notes or "")
+    else:
+        result = governance_services.approve_request(args.request_id, approver=args.approver, notes=args.notes or "")
+
+    if result is None:
+        print(f"No se encontro una solicitud de aprobacion con id '{args.request_id}'.")
+        return 1
+    print(f"Solicitud {result['id']} -> {result['status']} (por {result['resolved_by']})")
+    return 0
+
+
+def cmd_audit(args: argparse.Namespace) -> int:
+    from orion.governance import services as governance_services
+
+    entries = governance_services.list_audit(category=args.category, mission_id=args.mission)
+    if not entries:
+        print("Sin entradas de auditoria (con esos filtros).")
+        return 0
+    for entry in entries:
+        print(
+            f"{entry['recorded_at']}  mission={entry['mission_id']:12s} categoria={entry['category']:16s} "
+            f"riesgo={entry['risk_level']:8s} confianza={entry['confidence_score']:.2f} "
+            f"accion={entry['decision_action']:22s} resultado={entry['result']}"
+        )
+    return 0
+
+
+def cmd_mode(args: argparse.Namespace) -> int:
+    from orion.governance import services as governance_services
+
+    if args.set:
+        try:
+            profile = governance_services.set_mode(args.set, author=args.author, reason=args.reason or "")
+        except ValueError as exc:
+            print(str(exc))
+            return 1
+        print(f"Modo actualizado a {profile.mode}: {profile.description}")
+        return 0
+
+    profile = governance_services.get_mode_profile()
+    print(f"Modo actual: {profile.mode}")
+    print(profile.description)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="orion", description="ORION CLI (BETA 007 Runtime)")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -503,6 +589,38 @@ def build_parser() -> argparse.ArgumentParser:
     plan_parser.add_argument("request", help="Natural-language request")
     plan_parser.add_argument("--project", default=None)
     plan_parser.set_defaults(func=cmd_plan)
+
+    policy_parser = subparsers.add_parser("policy", help="Governance: show the real policy rule table")
+    policy_parser.set_defaults(func=cmd_policy)
+
+    risk_parser = subparsers.add_parser("risk", help="Governance: real risk assessment for a request")
+    risk_parser.add_argument("request", help="Natural-language request/change description")
+    risk_parser.add_argument("--project", default=None)
+    risk_parser.set_defaults(func=cmd_risk)
+
+    confidence_parser = subparsers.add_parser("confidence", help="Governance: real confidence assessment for a request")
+    confidence_parser.add_argument("request", help="Natural-language request/change description")
+    confidence_parser.add_argument("--project", default=None)
+    confidence_parser.set_defaults(func=cmd_confidence)
+
+    approve_parser = subparsers.add_parser("approve", help="Governance: manage the Approval Queue")
+    approve_parser.add_argument("--list", action="store_true", help="List pending approval requests")
+    approve_parser.add_argument("--request-id", default=None, help="Approval request id to resolve")
+    approve_parser.add_argument("--reject", action="store_true", help="Reject instead of approve")
+    approve_parser.add_argument("--approver", default="ORION", help="Who is resolving this request")
+    approve_parser.add_argument("--notes", default=None)
+    approve_parser.set_defaults(func=cmd_approve)
+
+    audit_parser = subparsers.add_parser("audit", help="Governance: real Audit trail")
+    audit_parser.add_argument("--category", default=None, help="Filter by Change Category")
+    audit_parser.add_argument("--mission", default=None, help="Filter by mission id")
+    audit_parser.set_defaults(func=cmd_audit)
+
+    mode_parser = subparsers.add_parser("mode", help="Governance: show or set the current Execution Mode")
+    mode_parser.add_argument("--set", default=None, help="One of MODE_DEVELOPMENT/MODE_HARDENING/MODE_RELEASE/MODE_PRODUCTION")
+    mode_parser.add_argument("--author", default="ORION")
+    mode_parser.add_argument("--reason", default=None)
+    mode_parser.set_defaults(func=cmd_mode)
 
     return parser
 

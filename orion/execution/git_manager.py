@@ -185,9 +185,26 @@ def get_commit_hash(repo_root: Path = REPO_ROOT) -> str:
     return _run("rev-parse", "HEAD", repo_root=repo_root)
 
 
-def delete_local_branch(name: str, repo_root: Path = REPO_ROOT) -> None:
-    """Delete a local branch (safe, non-forced: refuses if unmerged)."""
-    _run("branch", "-d", name, repo_root=repo_root)
+def delete_local_branch(name: str, repo_root: Path = REPO_ROOT, force: bool = False) -> None:
+    """Delete a local branch. ``force=False`` (default, every existing
+    caller): safe, non-forced ``-d``, refuses if unmerged. ``force=True``
+    (BETA 010, orion.governance.rollback): ``-D``, for abandoning a
+    Mission's own throwaway branch that is *known* unmerged -- the
+    caller is expected to have already confirmed via
+    is_branch_merged() that this is a real Mission branch, not shared
+    history, before ever passing force=True."""
+    flag = "-D" if force else "-d"
+    _run("branch", flag, name, repo_root=repo_root)
+
+
+def is_branch_merged(name: str, base: str = "main", repo_root: Path = REPO_ROOT) -> bool:
+    """Real check via ``git branch --merged <base>`` -- never guessed.
+    Added for orion.governance.rollback so it never has to reach past
+    GitManager into a raw git call itself (GitManager remains the only
+    module that ever touches git, same rule every prior Sprint kept)."""
+    output = _run("branch", "--merged", base, repo_root=repo_root)
+    merged_names = {line.strip().lstrip("* ").strip() for line in output.splitlines() if line.strip()}
+    return name in merged_names
 
 
 def recent_commits(limit: int = 5, repo_root: Path = REPO_ROOT) -> list[dict[str, str]]:

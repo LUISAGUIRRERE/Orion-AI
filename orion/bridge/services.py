@@ -116,8 +116,24 @@ def get_mission(mission_id: str) -> Mission | None:
 
 
 def list_missions() -> list[Mission]:
-    """Load every persisted mission."""
-    return [Mission(**storage.read_mission(mid)) for mid in storage.list_mission_ids()]
+    """Load every persisted mission.
+
+    Reads each mission's file separately from listing its id (two
+    filesystem calls, not one atomic snapshot). Under concurrent
+    access -- multiple Runtime workers claiming/writing missions in
+    their own threads -- a mission's file can transiently be
+    unreadable between those two calls; ``storage.read_mission``
+    already reports that honestly as ``None`` rather than raising.
+    Skip it instead of letting ``Mission(**None)`` blow up: a mission
+    that cannot be read right now is not different, from the caller's
+    perspective, from one that has not been listed yet.
+    """
+    missions: list[Mission] = []
+    for mid in storage.list_mission_ids():
+        data = storage.read_mission(mid)
+        if data is not None:
+            missions.append(Mission(**data))
+    return missions
 
 
 def update_status(mission_id: str, new_status: MissionStatus, author: str = "ORION") -> Mission | None:

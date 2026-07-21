@@ -114,6 +114,20 @@ class Worker:
             runtime_queue.mark_completed(mission_id)
             self.processed_count += 1
             runtime_events.emit(mission_id, "worker_completed", "Worker completo la mision.", AUTHOR)
+        elif result_mission.status == MissionStatus.WAITING:
+            # BETA 010 (Governance): orion.agents.builder.agent's
+            # Governance hook parks a mission here -- a real, deliberate
+            # pause for a hard_stop Decision (Architecture / Breaking
+            # Change / CRITICAL risk), never a failure. QueueItemStatus.WAITING
+            # already existed (orion.runtime.queue.mark_waiting), reserved
+            # for exactly this and never used until now -- this is not a
+            # new queue state, just its first real caller.
+            runtime_queue.mark_waiting(mission_id)
+            runtime_events.emit(
+                mission_id, "worker_waiting_for_governance",
+                "Worker dejo la mision en espera: Governance requiere una decision humana o aprobacion real.",
+                AUTHOR,
+            )
         else:
             runtime_queue.mark_failed(
                 mission_id, f"Mision termino con estado {result_mission.status.value}."

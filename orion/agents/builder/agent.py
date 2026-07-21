@@ -32,6 +32,7 @@ from orion.bridge.models import Mission, MissionStatus
 from orion.business import services as business_services
 from orion.execution import pipeline as execution_pipeline
 from orion.experience import services as experience_services
+from orion.governance import services as governance_services
 from orion.intelligence import services as intelligence_services
 from orion.prompt_composer import services as prompt_composer_services
 
@@ -310,6 +311,7 @@ def run_claimed_mission(mission: Mission) -> Mission | None:
     except Exception as exc:  # noqa: BLE001 - resolution must never crash or block the agent
         bridge_services.record_event(mission.id, "business_context_failed", str(exc), AUTHOR)
 
+    fallback_intelligence_brief = None
     if business_brief is None or not business_brief.resolved.resolved:
         # No real Company matched this request (or resolution itself
         # errored) -- fall back to BETA 008's own direct Project
@@ -318,14 +320,67 @@ def run_claimed_mission(mission: Mission) -> Mission | None:
         # every existing BETA 007/008 test) keep their exact prior
         # behavior.
         try:
-            brief = intelligence_services.prepare_request(
+            fallback_intelligence_brief = intelligence_services.prepare_request(
                 mission.description or mission.title,
                 project_key=mission.project_id or "",
                 mission_id=mission.id,
             )
-            bridge_services.record_event(mission.id, "intelligence_brief", brief.summary_text(), AUTHOR)
+            bridge_services.record_event(mission.id, "intelligence_brief", fallback_intelligence_brief.summary_text(), AUTHOR)
         except Exception as exc:  # noqa: BLE001 - analysis must never crash or block the agent
             bridge_services.record_event(mission.id, "intelligence_failed", str(exc), AUTHOR)
+
+    # BETA 010: Business Brain/Project Intelligence -> Risk Engine ->
+    # Policy Engine -> Decision Engine, exactly this Sprint's own
+    # Mission Flow order, before the Pipeline ever runs. Reuses --
+    # never recomputes -- whichever real ImpactReport the block above
+    # already produced (business_brief.intelligence_brief when
+    # Business Brain resolved a company with a real repo, or
+    # fallback_intelligence_brief otherwise); honestly passes
+    # impact=None when neither exists (Risk Engine's own documented,
+    # disclosed floor for "no real data", never a fabricated risk
+    # level).
+    if business_brief is not None and business_brief.intelligence_brief is not None:
+        governance_impact = business_brief.intelligence_brief.impact
+    elif fallback_intelligence_brief is not None:
+        governance_impact = fallback_intelligence_brief.impact
+    else:
+        governance_impact = None
+
+    try:
+        # evaluate_change() already emits its own "governance_evaluated"
+        # event (orion.governance.services._emit) -- recording it again
+        # here would double-emit the same event type, the exact class
+        # of bug BETA 008 already found once for review_completed.
+        governance_evaluation = governance_services.evaluate_change(
+            mission.description or mission.title,
+            mission_id=mission.id,
+            project_id=mission.project_id or "",
+            impact=governance_impact,
+        )
+    except Exception as exc:  # noqa: BLE001 - a Governance failure must never crash or silently block the agent
+        governance_evaluation = None
+        bridge_services.record_event(mission.id, "governance_failed", str(exc), AUTHOR)
+
+    if governance_evaluation is not None and governance_evaluation.decision.hard_stop:
+        # A real, per-change safety signal (Architecture / Breaking
+        # Change / CRITICAL risk) -- not merely the current Execution
+        # Mode's blanket posture (see PolicyOutcome.hard_stop's own
+        # docstring). This is the one real gate this Sprint's brief
+        # asks for: "Solo debe detenerse cuando exista una decision de
+        # arquitectura o de negocio que realmente requiera intervencion
+        # humana." Every other Mission -- including every existing
+        # BETA 007/008/009 test mission, none of which ever trigger
+        # this -- proceeds exactly as before.
+        bridge_services.record_event(mission.id, "governance_hard_stop", governance_evaluation.decision.rationale, AUTHOR)
+        bridge_services.update_status(mission.id, MissionStatus.WAITING, author=AUTHOR)
+        state.status = "idle"
+        state.current_mission_id = None
+        state.current_handler = None
+        state.current_project_id = None
+        state.touch()
+        _save_state(state)
+        _record_experience_safely(mission.id)
+        return bridge_services.get_mission(mission.id)
 
     try:
         pipeline_result = execution_pipeline.run(mission)
