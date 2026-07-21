@@ -16,6 +16,7 @@ from fastapi.staticfiles import StaticFiles
 
 from orion.bridge import storage as bridge_storage
 from orion.bridge.routes import router as bridge_api_router
+from orion.business.routes import router as business_api_router
 from orion.experience.routes import router as experience_api_router
 from orion.intelligence.routes import router as intelligence_api_router
 from orion.projects import registry as project_registry
@@ -38,6 +39,7 @@ app.include_router(bridge_api_router)
 app.include_router(projects_api_router)
 app.include_router(experience_api_router)
 app.include_router(intelligence_api_router)
+app.include_router(business_api_router)
 
 
 @app.on_event("startup")

@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section id="company-dashboard">
+    <p class="back-link"><a href="/companies">← Empresas</a></p>
+    <h1>{{ company.name }}</h1>
+    <p class="subtitle">{{ company.description or "Sin descripcion." }}</p>
+
+    <div class="card-grid">
+        <div class="card">
+            <div class="card-header"><span class="card-name">Perfil</span></div>
+            <div class="card-row"><span class="label">Estado</span><span>{{ company.status }}</span></div>
+            <div class="card-row"><span class="label">Mercado</span><span>{{ company.market or "—" }}</span></div>
+            <div class="card-row"><span class="label">Modelo de negocio</span><span>{{ company.business_model or "—" }}</span></div>
+            <div class="card-row"><span class="label">Sitios web</span><span>{{ company.websites|join(", ") or "—" }}</span></div>
+            <div class="card-row"><span class="label">Repositorios</span><span>{{ company.repositories|join(", ") or "—" }}</span></div>
+        </div>
+        <div class="card">
+            <div class="card-header"><span class="card-name">Branding</span></div>
+            {% if brand %}
+            <div class="card-row"><span class="label">Colores</span><span>{{ brand.colors|join(", ") or "—" }}</span></div>
+            <div class="card-row"><span class="label">Personalidad</span><span>{{ brand.personality|join(", ") or "—" }}</span></div>
+            <div class="card-row"><span class="label">Tono</span><span>{{ brand.tone or "—" }}</span></div>
+            <div class="card-row"><span class="label">Tipografia</span><span>{{ brand.typography or "—" }}</span></div>
+            {% else %}
+            <div class="card-row"><span>Sin branding definido.</span></div>
+            {% endif %}
+        </div>
+        <div class="card">
+            <div class="card-header"><span class="card-name">Objetivos declarados</span></div>
+            {% for o in company.objectives %}
+            <div class="card-row"><span>{{ o }}</span></div>
+            {% else %}
+            <div class="card-row"><span>—</span></div>
+            {% endfor %}
+        </div>
+        <div class="card">
+            <div class="card-header"><span class="card-name">Memoria (tecnologia y hechos permanentes)</span></div>
+            {% for key, values in memory.items() %}
+            <div class="card-row"><span class="label">{{ key }}</span><span>{{ values|join(", ") }}</span></div>
+            {% else %}
+            <div class="card-row"><span>Sin memoria registrada.</span></div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <h2>Proyectos</h2>
+    <table class="events-table">
+        <thead><tr><th>Nombre</th><th>Estado</th><th>Repositorio tecnico</th><th>Keywords</th></tr></thead>
+        <tbody>
+        {% for p in projects %}
+        <tr><td>{{ p.name }}</td><td>{{ p.status }}</td><td>{{ p.technical_project_id or "—" }}</td><td>{{ p.keywords|join(", ") }}</td></tr>
+        {% else %}
+        <tr><td colspan="4">Sin proyectos registrados.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    <h2>Objetivos (Goals)</h2>
+    <table class="events-table">
+        <thead><tr><th>Titulo</th><th>Estado</th><th>Progreso</th><th>Misiones</th></tr></thead>
+        <tbody>
+        {% for g in goals %}
+        <tr><td>{{ g.title }}</td><td>{{ g.status }}</td><td>{{ g.progress }}%</td><td>{{ g.mission_ids|length }}</td></tr>
+        {% else %}
+        <tr><td colspan="4">Sin objetivos registrados.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    <h2>Roadmap</h2>
+    {% for status in ["idea", "backlog", "in_progress", "done", "blocked"] %}
+    {% set items = roadmap|selectattr("status", "equalto", status)|list %}
+    {% if items %}
+    <h3>{{ status }}</h3>
+    <table class="events-table">
+        <thead><tr><th>Titulo</th><th>Misiones</th></tr></thead>
+        <tbody>
+        {% for item in items %}
+        <tr><td>{{ item.title }}</td><td>{{ item.mission_ids|join(", ") or "—" }}</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+    {% endfor %}
+
+    <h2>Documentos</h2>
+    <table class="events-table">
+        <thead><tr><th>Titulo</th><th>Tipo</th><th>Ruta</th></tr></thead>
+        <tbody>
+        {% for d in documents %}
+        <tr><td>{{ d.title }}</td><td>{{ d.doc_type }}</td><td>{{ d.path_or_url or "—" }}</td></tr>
+        {% else %}
+        <tr><td colspan="3">Sin documentos registrados.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    <h2>Decision Log</h2>
+    <table class="events-table">
+        <thead><tr><th>Decision</th><th>Motivo</th><th>Fecha</th><th>Autor</th><th>Impacto</th></tr></thead>
+        <tbody>
+        {% for d in decisions %}
+        <tr><td>{{ d.decision }}</td><td>{{ d.reason }}</td><td>{{ d.date }}</td><td>{{ d.author or "—" }}</td><td>{{ d.impact or "—" }}</td></tr>
+        {% else %}
+        <tr><td colspan="5">Sin decisiones registradas.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    <h2>Knowledge</h2>
+    <table class="events-table">
+        <thead><tr><th>Categoria</th><th>Hecho</th><th>Fuente</th></tr></thead>
+        <tbody>
+        {% for k in knowledge %}
+        <tr><td>{{ k.category }}</td><td>{{ k.fact }}</td><td>{{ k.source or "—" }}</td></tr>
+        {% else %}
+        <tr><td colspan="3">Sin conocimiento registrado.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endblock %}

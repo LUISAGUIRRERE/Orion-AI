@@ -28,12 +28,33 @@
                                   files.
     orion plan "<request>"        Decompose a request into real Missions
                                   via the rule-based Task Planner.
+    orion company list            List every real Company the Business
+                                  Brain knows about.
+    orion company create ID NAME  Register a new Company.
+    orion project list [--company ID]
+                                   List real BusinessProjects, optionally
+                                  scoped to one Company.
+    orion roadmap [--company ID]  Show a Company's real Roadmap (idea/
+                                  backlog/in_progress/done/blocked).
+    orion goals [--company ID]    Show a Company's real Goals.
+    orion knowledge [--company ID] Show a Company's real Knowledge/Memory.
+    orion understand "<request>" [--business]
+                                   With --business, resolve Company/
+                                  Project/branding/objective/risk via the
+                                  Business Brain first (BETA 009), exactly
+                                  what `orion ask` resolves automatically
+                                  before creating any Mission.
 
 BETA 007 commands talk to the Runtime exclusively over its REST API
 (see orion/runtime/api.py). BETA 008 Intelligence commands
 (analyze/understand/graph/impact/review/plan) call
 orion.intelligence.services directly -- local, static analysis, no
-running Runtime required. Neither talks to any LLM.
+running Runtime required. BETA 009 Business Brain commands (company/
+project/roadmap/goals/knowledge, and `orion understand --business`)
+call orion.business.services directly, which itself calls into
+orion.intelligence.services once a real Company/Project is resolved
+-- never a separate, duplicate analysis. Nothing in this file talks
+to any LLM.
 """
 
 from __future__ import annotations
@@ -211,6 +232,13 @@ def _print_architecture_node(node, indent: int) -> None:
 
 
 def cmd_understand(args: argparse.Namespace) -> int:
+    if getattr(args, "business", False):
+        from orion.business import services as business_services
+
+        brief = business_services.resolve_context(args.request)
+        print(brief.summary_text())
+        return 0 if brief.resolved.resolved else 1
+
     from orion.intelligence import services
 
     brief = services.prepare_request(args.request, project_key=_project_key(args))
@@ -303,6 +331,87 @@ def cmd_plan(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_company_list(args: argparse.Namespace) -> int:
+    from orion.business import services as business_services
+
+    companies = business_services.list_companies()
+    if not companies:
+        print("No hay empresas registradas todavia. Corre 'orion company create' o una migracion.")
+        return 0
+    for company in companies:
+        print(f"{company.id:12s} {company.name:20s} status={company.status:10s} objetivos={len(company.objectives)}")
+    return 0
+
+
+def cmd_company_create(args: argparse.Namespace) -> int:
+    from orion.business import services as business_services
+
+    try:
+        company = business_services.create_company(args.company_id, args.name, description=args.description or "")
+    except ValueError as exc:
+        print(str(exc))
+        return 1
+    print(f"Empresa creada: {company.id} ({company.name})")
+    return 0
+
+
+def cmd_project_list(args: argparse.Namespace) -> int:
+    from orion.business import services as business_services
+
+    projects = business_services.list_projects(args.company) if args.company else business_services.list_all_projects()
+    if not projects:
+        print("No hay proyectos de negocio registrados.")
+        return 0
+    for project in projects:
+        print(f"{project.id}  {project.company_id:12s} {project.name:20s} technical_project_id={project.technical_project_id or '-'}")
+    return 0
+
+
+def cmd_roadmap(args: argparse.Namespace) -> int:
+    from orion.business import services as business_services
+
+    companies = [args.company] if args.company else [c.id for c in business_services.list_companies()]
+    for company_id in companies:
+        items = business_services.list_roadmap(company_id)
+        if not items:
+            continue
+        print(f"=== {company_id} ===")
+        for item in items:
+            print(f"  [{item.status:12s}] {item.title}  (misiones: {len(item.mission_ids)})")
+    return 0
+
+
+def cmd_goals(args: argparse.Namespace) -> int:
+    from orion.business import services as business_services
+
+    companies = [args.company] if args.company else [c.id for c in business_services.list_companies()]
+    for company_id in companies:
+        goals = business_services.list_goals(company_id)
+        if not goals:
+            continue
+        print(f"=== {company_id} ===")
+        for goal in goals:
+            print(f"  [{goal.status:10s}] {goal.title}  progreso={goal.progress:.0f}%  misiones={len(goal.mission_ids)}")
+    return 0
+
+
+def cmd_knowledge(args: argparse.Namespace) -> int:
+    from orion.business import services as business_services
+
+    companies = [args.company] if args.company else [c.id for c in business_services.list_companies()]
+    for company_id in companies:
+        facts = business_services.list_knowledge(company_id)
+        memory = business_services.recall_memory(company_id)
+        if not facts and not memory:
+            continue
+        print(f"=== {company_id} ===")
+        for key, values in memory.items():
+            print(f"  memoria[{key}]: {', '.join(values)}")
+        for fact in facts:
+            print(f"  conocimiento[{fact.category}]: {fact.fact}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="orion", description="ORION CLI (BETA 007 Runtime)")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -339,7 +448,41 @@ def build_parser() -> argparse.ArgumentParser:
     understand_parser = subparsers.add_parser("understand", help="Full Intelligence brief for a request")
     understand_parser.add_argument("request", help="Natural-language request")
     understand_parser.add_argument("--project", default=None)
+    understand_parser.add_argument(
+        "--business", action="store_true",
+        help="Resolve via the Business Brain (Company/Project/branding/objective/risk) instead of raw Project Intelligence",
+    )
     understand_parser.set_defaults(func=cmd_understand)
+
+    company_parser = subparsers.add_parser("company", help="Business Brain: companies")
+    company_sub = company_parser.add_subparsers(dest="company_command", required=True)
+
+    company_list_parser = company_sub.add_parser("list", help="List every registered Company")
+    company_list_parser.set_defaults(func=cmd_company_list)
+
+    company_create_parser = company_sub.add_parser("create", help="Register a new Company")
+    company_create_parser.add_argument("company_id", help="Folder-safe id, e.g. 'atman'")
+    company_create_parser.add_argument("name", help="Display name, e.g. 'ATMAN'")
+    company_create_parser.add_argument("--description", default=None)
+    company_create_parser.set_defaults(func=cmd_company_create)
+
+    project_parser = subparsers.add_parser("project", help="Business Brain: projects")
+    project_sub = project_parser.add_subparsers(dest="project_command", required=True)
+    project_list_parser = project_sub.add_parser("list", help="List BusinessProjects")
+    project_list_parser.add_argument("--company", default=None, help="Scope to one Company id")
+    project_list_parser.set_defaults(func=cmd_project_list)
+
+    roadmap_parser = subparsers.add_parser("roadmap", help="Business Brain: roadmap")
+    roadmap_parser.add_argument("--company", default=None, help="Scope to one Company id")
+    roadmap_parser.set_defaults(func=cmd_roadmap)
+
+    goals_parser = subparsers.add_parser("goals", help="Business Brain: goals")
+    goals_parser.add_argument("--company", default=None, help="Scope to one Company id")
+    goals_parser.set_defaults(func=cmd_goals)
+
+    knowledge_parser = subparsers.add_parser("knowledge", help="Business Brain: knowledge + memory")
+    knowledge_parser.add_argument("--company", default=None, help="Scope to one Company id")
+    knowledge_parser.set_defaults(func=cmd_knowledge)
 
     graph_parser = subparsers.add_parser("graph", help="Real dependency graph")
     graph_parser.add_argument("--project", default=None)
