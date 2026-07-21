@@ -15,6 +15,8 @@ document into generated output "solo por comodidad".
 
 from __future__ import annotations
 
+import os
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -40,15 +42,29 @@ class DriftResult:
     rendered: str
 
 
+def _escape_markdown_table_cell(value: str) -> str:
+    """G-012 REMEDIATION (HIGH #4): a display_name/role/responsibility
+    containing a literal ``|`` would otherwise split a Markdown table
+    cell and corrupt the generated table's structure. Escapes ``|``
+    and collapses any embedded newline (which would just as surely
+    break a one-line table row) into a single space -- never silently
+    drops content."""
+    return value.replace("|", "\\|").replace("\r\n", " ").replace("\n", " ").replace("\r", " ")
+
+
 def _format_agents_table(config: BoardConfiguration) -> str:
     lines = [BEGIN_MARKER, "", "| Name | Role | Responsible For | Prompt |", "|---|---|---|---|"]
     for member in config.members:
         if member.documentation_path:
-            prompt_cell = f"[`{Path(member.documentation_path).name}`]({member.documentation_path})"
+            prompt_label = _escape_markdown_table_cell(Path(member.documentation_path).name)
+            prompt_cell = f"[`{prompt_label}`]({member.documentation_path})"
         else:
             prompt_cell = "— (human)"
         responsible_for = member.responsibilities[0] if member.responsibilities else ""
-        lines.append(f"| {member.display_name} | {member.role} | {responsible_for} | {prompt_cell} |")
+        display_name = _escape_markdown_table_cell(member.display_name)
+        role = _escape_markdown_table_cell(member.role)
+        responsible_for = _escape_markdown_table_cell(responsible_for)
+        lines.append(f"| {display_name} | {role} | {responsible_for} | {prompt_cell} |")
     lines.append("")
     lines.append(END_MARKER)
     return "\n".join(lines)
@@ -58,7 +74,10 @@ def _format_board_md_table(config: BoardConfiguration) -> str:
     lines = [BEGIN_MARKER, "", "| Name | Role | Authority |", "|---|---|---|"]
     for member in config.members:
         authority = member.responsibilities[0] if member.responsibilities else ""
-        lines.append(f"| {member.display_name} | {member.role} | {authority} |")
+        display_name = _escape_markdown_table_cell(member.display_name)
+        role = _escape_markdown_table_cell(member.role)
+        authority = _escape_markdown_table_cell(authority)
+        lines.append(f"| {display_name} | {role} | {authority} |")
     lines.append("")
     lines.append(END_MARKER)
     return "\n".join(lines)
@@ -98,17 +117,39 @@ def check_drift(config: BoardConfiguration | None = None) -> list[DriftResult]:
     return results
 
 
+def _atomic_write(path: Path, content: str) -> None:
+    """G-012 REMEDIATION (HIGH #3): temp-file-in-the-same-directory +
+    os.replace(), the exact same atomic-write idiom already used by
+    orion.governance.storage.write_yaml and orion.board.storage.
+    write_yaml -- never a direct write_text(), which can leave a
+    truncated/partial file on disk if the process is interrupted
+    mid-write. os.replace() is atomic on the same filesystem, so a
+    reader always sees either the old, complete content or the new,
+    complete content, never a mix of the two."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(dir=str(path.parent), prefix=f".{path.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(content)
+        os.replace(tmp_name, path)
+    finally:
+        if os.path.exists(tmp_name):
+            os.unlink(tmp_name)
+
+
 def generate(config: BoardConfiguration | None = None, check_only: bool = False) -> list[DriftResult]:
     """Regenerates every target from the canonical Board configuration.
     Idempotent and deterministic: given the same board.yaml, produces
     byte-identical output every time (stable member order, no
-    timestamps). Writes only the files that actually changed. When
-    ``check_only`` is True, never writes -- same contract as
-    check_drift(), returned in the same shape so CLI callers share one
-    code path for both commands."""
+    timestamps). Writes only the files that actually changed, and only
+    after every target has already been validated and rendered by
+    check_drift() above -- an all-or-nothing pass, never a partially
+    regenerated set of files. When ``check_only`` is True, never writes
+    -- same contract as check_drift(), returned in the same shape so
+    CLI callers share one code path for both commands."""
     results = check_drift(config=config)
     if not check_only:
         for result in results:
             if result.has_drift:
-                result.path.write_text(result.rendered, encoding="utf-8")
+                _atomic_write(result.path, result.rendered)
     return results
