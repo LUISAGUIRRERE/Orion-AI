@@ -362,7 +362,27 @@ class RuntimeIntegrationTests(unittest.TestCase):
     intelligence_brief behavior. Reuses
     tests.test_runtime.IsolatedRuntimeTestCase's bridge/runtime
     storage isolation rather than duplicating it, plus isolates
-    orion.business.storage and orion.intelligence.storage on top."""
+    orion.business.storage and orion.intelligence.storage on top.
+
+    BETA 010 fix: run_claimed_mission() here reaches the real
+    Pipeline (mission_type="executor", no hard Governance stop for
+    either mission below), which calls orion.execution.workspace.
+    Workspace.prepare() -- and that does a REAL `git checkout main`
+    against whatever git_manager.REPO_ROOT resolves to. Before this
+    fix that default was git_manager.REPO_ROOT itself, i.e. this
+    literal working checkout: harmless while every Sprint developed
+    on a branch whose own modules were already fully imported into
+    sys.modules before this test ran, but a real, reproducible failure
+    the moment a fresh module (orion.governance.routes, imported only
+    lazily inside tests.test_governance's own APIRouteTests, which
+    unittest discover runs *after* this file alphabetically) needed to
+    be read from disk for the first time -- by then this test had
+    already checked out `main` for real, and `main` does not have
+    feat/governance-v1's files. Fixed the actual hazard, not just the
+    symptom: clone the real repo into a disposable temp directory and
+    point git_manager.REPO_ROOT there for the duration of this class,
+    so these tests never touch the developer's actual working tree
+    again, on this branch or any future one."""
 
     def setUp(self) -> None:
         from tests.test_runtime import IsolatedRuntimeTestCase
@@ -380,7 +400,24 @@ class RuntimeIntegrationTests(unittest.TestCase):
         self._orig_intelligence_dir = intelligence_storage.INTELLIGENCE_DIR
         intelligence_storage.INTELLIGENCE_DIR = Path(self._intelligence_tmp.name)
 
+        from orion.execution import git_manager
+
+        self._repo_tmp = tempfile.TemporaryDirectory()
+        self._clone_root = Path(self._repo_tmp.name) / "repo"
+        subprocess.run(
+            ["git", "clone", "--quiet", str(REPO_ROOT), str(self._clone_root)], check=True
+        )
+        subprocess.run(["git", "-C", str(self._clone_root), "config", "user.email", "test@orion.local"], check=True)
+        subprocess.run(["git", "-C", str(self._clone_root), "config", "user.name", "Orion Test"], check=True)
+        self._orig_repo_root = git_manager.REPO_ROOT
+        git_manager.REPO_ROOT = self._clone_root
+
     def tearDown(self) -> None:
+        from orion.execution import git_manager
+
+        git_manager.REPO_ROOT = self._orig_repo_root
+        self._repo_tmp.cleanup()
+
         from orion.intelligence import storage as intelligence_storage
 
         intelligence_storage.INTELLIGENCE_DIR = self._orig_intelligence_dir
