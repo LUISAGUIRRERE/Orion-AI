@@ -1,0 +1,179 @@
+#!/usr/bin/env python3
+"""orion -- the ORION CLI. Real commands, no scripts to copy-paste.
+
+    orion runtime start          Start the resident Runtime (REST + SSE
+                                  API, and its Worker pool) in the
+                                  foreground. Stop with Ctrl+C, or from
+                                  another terminal with `orion runtime stop`.
+    orion runtime stop           Send a graceful shutdown signal to a
+                                  running Runtime process (reads its PID
+                                  from the persisted RuntimeState).
+    orion ask "<title>"          Create and enqueue a mission against a
+                                  running Runtime's API, then wait for a
+                                  Worker to finish it (or --no-wait to
+                                  return immediately).
+
+BETA 007. Every command talks to the Runtime exclusively over its REST
+API (see orion/runtime/api.py) -- this file contains no mission
+execution logic of its own.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+import time
+import urllib.error
+import urllib.request
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT))
+
+
+def _runtime_url(port: int) -> str:
+    return f"http://127.0.0.1:{port}"
+
+
+def _get(url: str, timeout: float = 10.0) -> dict:
+    with urllib.request.urlopen(url, timeout=timeout) as response:
+        return json.loads(response.read())
+
+
+def _post(url: str, payload: dict, timeout: float = 10.0) -> dict:
+    body = json.dumps(payload).encode("utf-8")
+    request = urllib.request.Request(
+        url, data=body, headers={"Content-Type": "application/json"}, method="POST"
+    )
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        return json.loads(response.read())
+
+
+def cmd_runtime_start(args: argparse.Namespace) -> int:
+    import uvicorn
+
+    from orion.runtime.config import RuntimeConfig
+
+    config = RuntimeConfig.from_env()
+    port = args.port or config.port
+    print(
+        f"ORION Runtime iniciando en http://0.0.0.0:{port} "
+        f"(provider={config.provider}, workers={config.workers})"
+    )
+    print("Ctrl+C para detener. En otra terminal: orion runtime stop")
+    uvicorn.run("orion.runtime.api:app", host="0.0.0.0", port=port)
+    return 0
+
+
+def cmd_runtime_stop(args: argparse.Namespace) -> int:
+    import os
+    import signal
+
+    from orion.runtime import storage as runtime_storage
+
+    state = runtime_storage.load_state()
+    if not state.running or not state.pid:
+        print("El Runtime no parece estar corriendo (sin estado persistido con running=True).")
+        return 1
+    try:
+        os.kill(state.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        print(f"No hay ningun proceso vivo con PID {state.pid}. Limpiando estado persistido.")
+        state.running = False
+        runtime_storage.save_state(state)
+        return 1
+    print(f"Señal de apagado (SIGTERM) enviada al proceso {state.pid}.")
+    return 0
+
+
+def cmd_ask(args: argparse.Namespace) -> int:
+    from orion.runtime.config import RuntimeConfig
+
+    config = RuntimeConfig.from_env()
+    port = args.port or config.port
+    base_url = _runtime_url(port)
+
+    payload = {
+        "title": args.prompt,
+        "description": args.description or args.prompt,
+        "project_id": args.project or "",
+        "tags": args.tag or [],
+    }
+
+    try:
+        body = _post(f"{base_url}/missions", payload)
+    except urllib.error.URLError as exc:
+        print(
+            f"No se pudo conectar al Runtime en {base_url}. "
+            f"¿Corriste 'orion runtime start' primero? Error: {exc}"
+        )
+        return 1
+
+    mission_id = body["mission_id"]
+    print(f"Mision creada: {mission_id} (status inicial: {body['status']}, cola: {body['queue_status']})")
+
+    if args.no_wait:
+        return 0
+
+    print("Esperando a que un Worker la procese...")
+    deadline = time.monotonic() + args.timeout
+    last_status = None
+    while time.monotonic() < deadline:
+        try:
+            detail = _get(f"{base_url}/missions/{mission_id}")
+        except urllib.error.URLError as exc:
+            print(f"Error consultando el Runtime: {exc}")
+            return 1
+        status = detail["mission"]["status"]
+        if status != last_status:
+            print(f"  status: {status}")
+            last_status = status
+        if status in ("REVIEW", "DONE", "FAILED"):
+            queue_item = detail.get("queue_item")
+            if queue_item:
+                print(f"Queue status: {queue_item['status']}")
+                if queue_item.get("error"):
+                    print(f"Error: {queue_item['error']}")
+            return 0 if status in ("REVIEW", "DONE") else 1
+        time.sleep(2)
+
+    print(f"Tiempo de espera agotado ({args.timeout}s) sin que la mision termine. mission_id={mission_id}")
+    return 1
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="orion", description="ORION CLI (BETA 007 Runtime)")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    runtime_parser = subparsers.add_parser("runtime", help="Runtime lifecycle")
+    runtime_sub = runtime_parser.add_subparsers(dest="runtime_command", required=True)
+
+    start_parser = runtime_sub.add_parser("start", help="Start the resident Runtime (foreground)")
+    start_parser.add_argument("--port", type=int, default=None)
+    start_parser.set_defaults(func=cmd_runtime_start)
+
+    stop_parser = runtime_sub.add_parser("stop", help="Stop a running Runtime process")
+    stop_parser.set_defaults(func=cmd_runtime_stop)
+
+    ask_parser = subparsers.add_parser("ask", help="Create and enqueue a mission")
+    ask_parser.add_argument("prompt", help="Mission title/instructions")
+    ask_parser.add_argument("--description", default=None)
+    ask_parser.add_argument("--project", default=None, help="Registered project_id (default: none)")
+    ask_parser.add_argument("--tag", action="append", default=None)
+    ask_parser.add_argument("--port", type=int, default=None)
+    ask_parser.add_argument("--no-wait", action="store_true")
+    ask_parser.add_argument("--timeout", type=float, default=180.0)
+    ask_parser.set_defaults(func=cmd_ask)
+
+    return parser
+
+
+def main() -> int:
+    parser = build_parser()
+    args = parser.parse_args()
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

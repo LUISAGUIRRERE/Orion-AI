@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+from orion.executor.adapters.base import ProviderAdapter
 from orion.executor.models import ExecutionArtifact, ExecutionResult, ExecutionStatus
 from orion.executor.registry import register_adapter
 from orion.prompt_composer.models import PromptPackage
@@ -25,14 +26,22 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-class DeterministicLocalAdapter:
+class DeterministicLocalAdapter(ProviderAdapter):
     """See module docstring. Registered under 'deterministic_local'.
 
-    Uses ProviderAdapter's default health_check()/cancel()/
-    capabilities() as-is (via structural typing -- this class doesn't
-    inherit from ProviderAdapter, the same way it didn't before this
-    Sprint; orion.executor.registry never checks isinstance, only
-    ``.name`` and ``.execute``). Its own capabilities() override below
+    Inherits ProviderAdapter's default health_check()/cancel() as-is
+    (always healthy, cancel unsupported -- both true statements for a
+    synchronous, in-process test double with nothing to cancel). Fixed
+    in BETA 007: this class previously did NOT inherit from
+    ProviderAdapter at all, so .health_check()/.cancel() did not exist
+    on it and calling them raised AttributeError -- a real bug, found
+    when orion.runtime.services.health_report() became the first
+    caller to invoke .health_check() polymorphically on whatever
+    adapter orion.executor.registry.get_adapter() returns, regardless
+    of which provider is configured. orion.executor.registry itself
+    still never checks isinstance (only ``.name`` and ``.execute``),
+    so this change is purely additive: every other caller keeps
+    working exactly as before. Its own capabilities() override below
     exists only to say something more specific than the generic
     default message.
     """

@@ -173,6 +173,7 @@ class ClaudeCodeAdapter:
                 capture_output=True,
                 text=True,
                 timeout=15,
+                stdin=subprocess.DEVNULL,
             )
         except (OSError, subprocess.TimeoutExpired) as exc:
             return AdapterHealth(

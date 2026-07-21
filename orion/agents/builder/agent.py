@@ -16,6 +16,9 @@ every other piece of Bridge data is persisted, closes that gap.
 
 from __future__ import annotations
 
+import os
+import tempfile
+import threading
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -75,11 +78,48 @@ def _load_state() -> BuilderState:
     return state
 
 
+# BETA 007 concurrency fix: _save_state() writes the *entire*
+# BuilderState file in one shot on every call, and run_claimed_mission()
+# (unlike claim_next_ready_mission()) is intentionally allowed to run
+# truly in parallel across Workers processing distinct missions -- so
+# concurrent _save_state() calls for different missions could
+# previously interleave their writes to the same file, corrupting it.
+# This lock only prevents that write-write corruption; it does not
+# make multi-field read-modify-write sequences (e.g. completed_today
+# += 1) atomic across threads -- BuilderState was designed for a
+# single Builder process/cycle (Sprint 006) and its per-mission fields
+# (current_mission_id, current_handler) were never meant to describe
+# more than one mission at a time. Under real concurrency they become
+# best-effort/last-writer-wins, a pre-existing semantic limitation of
+# this dataclass that this Sprint does not attempt to redesign -- only
+# the file-corruption crash is in scope and fixed here.
+_STATE_FILE_LOCK = threading.Lock()
+
+
 def _save_state(state: BuilderState) -> None:
     """Persist the Builder's state so any process can read it."""
-    STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with STATE_FILE.open("w", encoding="utf-8") as fh:
-        yaml.safe_dump(asdict(state), fh)
+    with _STATE_FILE_LOCK:
+        STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        # Atomic write (temp file + os.replace), same fix and same
+        # reasoning as orion.runtime.storage._atomic_write_yaml: a
+        # plain open(path, "w") truncates before it finishes writing,
+        # so a concurrent, unlocked reader (get_state(), used by The
+        # Window) could observe a partial file. _STATE_FILE_LOCK above
+        # already serializes writer-vs-writer; this makes the write
+        # itself safe for readers that never take that lock.
+        fd, tmp_name = tempfile.mkstemp(
+            dir=str(STATE_FILE.parent), prefix=f".{STATE_FILE.name}.", suffix=".tmp"
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                yaml.safe_dump(asdict(state), fh)
+            os.replace(tmp_name, STATE_FILE)
+        except BaseException:
+            try:
+                os.unlink(tmp_name)
+            except OSError:
+                pass
+            raise
 
 
 def get_state() -> BuilderState:
@@ -116,31 +156,80 @@ def _record_experience_safely(mission_id: str) -> None:
         bridge_services.record_event(mission_id, "experience_generation_failed", str(exc), AUTHOR)
 
 
+# BETA 007 (Runtime): process_next() used to have exactly one caller
+# at a time by construction (a single COO/Builder cycle). The Runtime
+# now calls it from multiple concurrent Worker threads
+# (orion.runtime.worker.Worker), which exposed a real TOCTOU race
+# between "scan for the next READY mission" and "mark it RUNNING":
+# two threads could both find the same READY mission before either
+# had claimed it. This lock serializes only that short claim window
+# (scan + transition to RUNNING), never the mission's actual work
+# below (Prompt Composer / Executor / Provider / Git / Experience),
+# so concurrent Workers still execute in real parallel once each has
+# claimed a distinct mission -- see
+# tests/test_runtime.py::SchedulerTests::
+# test_concurrent_workers_each_process_a_distinct_mission_exactly_once,
+# which reproduced the race before this fix and passes with it.
+_CLAIM_LOCK = threading.Lock()
+
+
+def claim_next_ready_mission() -> Mission | None:
+    """Atomically find the next READY mission and transition it to
+    RUNNING (recording builder_assigned/builder_started), or return
+    None if nothing is READY. The whole find-then-transition happens
+    under _CLAIM_LOCK -- see the comment above the lock's definition.
+
+    Public (no leading underscore) since BETA 007:
+    orion.runtime.worker.Worker calls this directly rather than
+    re-implementing its own "find the next READY mission" scan, which
+    is exactly what caused the race this lock exists to prevent in the
+    first place -- a second, unlocked scan implementation living in a
+    different module could always see a mission as READY a moment
+    before this one had actually claimed it. There is now exactly one
+    scan-and-claim implementation, used by both process_next() (the
+    original, single-caller entry point) and Worker.run_once().
+    """
+    with _CLAIM_LOCK:
+        state = _load_state()
+        mission = _find_next_ready_mission()
+        if mission is None:
+            state.status = "idle"
+            _save_state(state)
+            return None
+
+        state.status = "working"
+        state.current_mission_id = mission.id
+        state.touch()
+        _save_state(state)
+
+        bridge_services.record_event(
+            mission.id, "builder_assigned", f"Builder tomo la mission '{mission.title}'.", AUTHOR
+        )
+        mission = bridge_services.update_status(mission.id, MissionStatus.RUNNING, author=AUTHOR)
+        assert mission is not None
+        bridge_services.record_event(mission.id, "builder_started", "Builder inicio la ejecucion.", AUTHOR)
+        return mission
+
+
 def process_next() -> Mission | None:
     """Process exactly one READY mission end to end.
 
     Returns the mission in its final state (REVIEW or FAILED), or None
     if no READY mission was found.
     """
-    state = _load_state()
-    mission = _find_next_ready_mission()
+    mission = claim_next_ready_mission()
     if mission is None:
-        state.status = "idle"
-        _save_state(state)
         return None
+    return run_claimed_mission(mission)
 
-    state.status = "working"
-    state.current_mission_id = mission.id
-    state.touch()
-    _save_state(state)
 
-    bridge_services.record_event(
-        mission.id, "builder_assigned", f"Builder tomo la mission '{mission.title}'.", AUTHOR
-    )
-    mission = bridge_services.update_status(mission.id, MissionStatus.RUNNING, author=AUTHOR)
-    assert mission is not None
-    bridge_services.record_event(mission.id, "builder_started", "Builder inicio la ejecucion.", AUTHOR)
-
+def run_claimed_mission(mission: Mission) -> Mission | None:
+    """Runs the rest of process_next()'s original body for a Mission
+    that has *already* been claimed (already RUNNING) via
+    claim_next_ready_mission() -- split out so orion.runtime.worker.Worker
+    can do its own queue bookkeeping/event emission in between the
+    claim and the actual work, without duplicating either half."""
+    state = _load_state()
     state.current_handler = mission.mission_type
     state.current_project_id = mission.project_id or None
     _save_state(state)

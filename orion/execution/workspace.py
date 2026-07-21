@@ -43,6 +43,11 @@ RUNTIME_PATHS: tuple[str, ...] = (
     # finishes, never part of the deliverable GitManager.commit()
     # stages.
     "workspace/knowledge/",
+    # BETA 007 (Runtime): the Runtime's own queue ledger and process
+    # state (workspace/runtime/), same reasoning as every other entry
+    # above -- written by the Runtime process itself (queue.yaml,
+    # runtime_state.yaml), never part of any mission's own deliverable.
+    "workspace/runtime/",
 )
 
 

@@ -159,3 +159,61 @@ body {
     display: inline-block;
     margin-bottom: 16px;
 }
+
+/* BETA 007 (Runtime): "Nueva misión" button/form on missions.html and
+   the live SSE status indicator on mission_detail.html. Additive only
+   -- reuses .card-header/.card-row/.label/.hint conventions already
+   established above rather than inventing a new visual language. */
+.btn-primary {
+    background: var(--green);
+    color: #0f1115;
+    border: none;
+    border-radius: 4px;
+    padding: 6px 14px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.btn-primary:hover {
+    opacity: 0.9;
+}
+
+.new-mission-form {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+}
+
+.new-mission-form input[type="text"] {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 4px;
+    padding: 6px 8px;
+    width: 60%;
+}
+
+.new-mission-form button {
+    margin-right: 8px;
+}
+
+.hint {
+    color: var(--muted);
+    font-size: 0.85em;
+    margin: 6px 0 0;
+}
+
+.live-indicator {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+    margin-right: 6px;
+}
+
+.live-indicator.connected {
+    background: var(--green);
+}
