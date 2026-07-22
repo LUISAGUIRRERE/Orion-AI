@@ -6,6 +6,8 @@ Before this Mission, the AI Board's roster (Luis Aguirre, ChatGPT, Claude, Jules
 
 `.ai/board.yaml` is now the single, machine-readable place that data lives. The two tables above are *generated* from it and must never be edited by hand.
 
+**Relationship to Mission B-011 ("AI Board Orchestrator"):** B-011 (the coordination layer: `orion/board/board_engine.py` deciding a Mission's pipeline, `orion/board/mission_pipeline.py` persisting that decision, `orion/board/board_router.py` deriving real per-stage progress from a Mission's own recorded events, and `orion/board/services.py` as the single public entry point, wired into Runtime's `builder.agent` hook, `bin/orion board ...`, and `/api/board/...`) was implemented and completed before this Mission. G-012 did not re-implement or replace any of it — it only gave `orion/board/member_registry.py`'s dynamic member resolution one real canonical source (`.ai/board.yaml`) to resolve against, instead of a second hand-maintained copy of the roster. B-011's own coverage (pipeline decision, dynamic member resolution, stage tracking via events, mission-status/approval-flow integration via Runtime/Governance rather than duplicating either) is verified by `tests/test_board.py` (31 tests) and confirmed current as of 2026-07-21.
+
 ## Location and schema
 
 - **Canonical source:** [`.ai/board.yaml`](../.ai/board.yaml)
