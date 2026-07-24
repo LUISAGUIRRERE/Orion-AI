@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+
+{% block content %}
+<a href="/missions" class="back-link">&larr; Volver a Misiones</a>
+
+<section id="mission-detail" data-mission-id="{{ mission.id }}">
+    <div class="card-header">
+        <h1>{{ mission.id }} — {{ mission.title }}</h1>
+        <span><span id="live-indicator" class="live-indicator" title="Actualizacion en vivo via SSE (Runtime)"></span>en vivo</span>
+    </div>
+
+    <h2>Información general</h2>
+    <div class="card-row"><span class="label">Estado</span><span id="mission-status-value">{{ mission.status.value }}</span></div>
+    <div class="card-row"><span class="label">Responsable</span><span>{{ mission.owner or "—" }}</span></div>
+    <div class="card-row"><span class="label">Business Unit</span><span>{{ mission.business_unit or "—" }}</span></div>
+    <div class="card-row"><span class="label">Prioridad</span><span>{{ mission.priority }}</span></div>
+    <div class="card-row"><span class="label">Rol asignado</span><span>{{ mission.assigned_role or "—" }}</span></div>
+    <div class="card-row"><span class="label">Descripción</span><span>{{ mission.description or "—" }}</span></div>
+    <div class="card-row"><span class="label">Creada</span><span>{{ mission.created_at }}</span></div>
+    <div class="card-row"><span class="label">Actualizada</span><span>{{ mission.updated_at }}</span></div>
+    <div class="card-row"><span class="label">Iniciada</span><span>{{ mission.started_at or "—" }}</span></div>
+    <div class="card-row"><span class="label">Finalizada</span><span>{{ mission.finished_at or "—" }}</span></div>
+    <div class="card-row"><span class="label">Tags</span><span>{{ mission.tags | join(", ") if mission.tags else "—" }}</span></div>
+
+    {% if experience_report %}
+    <h2>Experience Report</h2>
+    <div class="card-row"><span class="label">Confianza</span><span>{{ experience_report.confidence_score }}</span></div>
+    <div class="card-row"><span class="label">Objetivos alcanzados</span><span>{{ experience_report.objectives_achieved | join("; ") if experience_report.objectives_achieved else "—" }}</span></div>
+    <div class="card-row"><span class="label">Archivos tocados</span><span>{{ experience_report.files_modified | join(", ") if experience_report.files_modified else "—" }}</span></div>
+    <div class="card-row"><span class="label">Patrones detectados</span><span>{{ experience_report.patterns_detected | join("; ") if experience_report.patterns_detected else "—" }}</span></div>
+    <div class="card-row"><span class="label">Componentes reutilizables</span><span>{{ experience_report.reusable_components | join(", ") if experience_report.reusable_components else "—" }}</span></div>
+    <div class="card-row"><span class="label">Errores encontrados</span><span>{{ experience_report.errors_encountered | join("; ") if experience_report.errors_encountered else "—" }}</span></div>
+    <div class="card-row"><span class="label">Recomendaciones</span><span>{{ experience_report.recommendations | join("; ") if experience_report.recommendations else "—" }}</span></div>
+
+    {% if knowledge_items %}
+    <h3>Conocimiento generado</h3>
+    <table class="events-table">
+        <thead>
+            <tr><th>Tipo</th><th>Titulo</th><th>Confianza</th></tr>
+        </thead>
+        <tbody>
+            {% for item in knowledge_items %}
+            <tr>
+                <td>{{ item.type.value if item.type is not string else item.type }}</td>
+                <td>{{ item.title }}</td>
+                <td>{{ item.confidence }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+    {% endif %}
+
+    <h2>Timeline</h2>
+    <table class="events-table">
+        <thead>
+            <tr><th>Fecha</th><th>Tipo</th><th>Mensaje</th><th>Autor</th></tr>
+        </thead>
+        <tbody id="timeline-body">
+            {% for event in events %}
+            <tr>
+                <td>{{ event.timestamp }}</td>
+                <td>{{ event.type }}</td>
+                <td>{{ event.message }}</td>
+                <td>{{ event.author }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="4">Sin eventos todavía.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <h2>Mensajes</h2>
+    <table class="events-table">
+        <thead>
+            <tr><th>Fecha</th><th>De</th><th>Para</th><th>Mensaje</th></tr>
+        </thead>
+        <tbody>
+            {% for msg in messages %}
+            <tr>
+                <td>{{ msg.created_at }}</td>
+                <td>{{ msg.sender }}</td>
+                <td>{{ msg.receiver }}</td>
+                <td>{{ msg.message }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="4">Sin mensajes todavía.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endblock %}

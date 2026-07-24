@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section id="companies-list">
+    <h1>Empresas — Business Brain</h1>
+    <p class="subtitle">El Business Brain de ORION: cada empresa, su contexto real, cargado automaticamente.</p>
+    <div class="card-grid">
+        {% for company in companies %}
+        <a class="card" href="/companies/{{ company.id }}">
+            <div class="card-header">
+                <span class="card-name">{{ company.name }}</span>
+            </div>
+            <div class="card-row"><span class="label">Estado</span><span>{{ company.status }}</span></div>
+            <div class="card-row"><span class="label">Descripcion</span><span>{{ (company.description[:80] + "...") if company.description|length > 80 else company.description }}</span></div>
+            <div class="card-row"><span class="label">Sitios web</span><span>{{ company.websites|join(", ") or "—" }}</span></div>
+            <div class="card-row"><span class="label">Objetivos</span><span>{{ company.objectives|length }}</span></div>
+        </a>
+        {% else %}
+        <p>No hay empresas registradas todavia. Corre una migracion (<code>orion.business.services.migrate_existing()</code>) o <code>orion company create</code>.</p>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}

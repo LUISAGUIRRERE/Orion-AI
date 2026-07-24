@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section id="governance">
+    <h1>Governance — Autonomous Development Engine</h1>
+    <p class="subtitle">ORION como Director Tecnico Autonomo: politicas explicitas, medibles y auditables.</p>
+
+    <div class="card-grid">
+        <div class="card">
+            <div class="card-header"><span class="card-name">Modo de ejecucion actual</span></div>
+            <div class="card-row"><span class="label">Modo</span><span>{{ mode_profile.mode }}</span></div>
+            <div class="card-row"><span class="label">Descripcion</span><span>{{ mode_profile.description }}</span></div>
+            <div class="card-row"><span class="label">Corrige bugs automaticamente</span><span>{{ "si" if mode_profile.can_auto_fix_bugs else "no" }}</span></div>
+            <div class="card-row"><span class="label">Crea tests automaticamente</span><span>{{ "si" if mode_profile.can_create_tests_automatically else "no" }}</span></div>
+            <div class="card-row"><span class="label">Genera PR en vez de cambio directo</span><span>{{ "si" if mode_profile.generates_pull_request_instead_of_direct_change else "no" }}</span></div>
+            <div class="card-row"><span class="label">Nunca modifica produccion directamente</span><span>{{ "si" if mode_profile.never_modifies_production_directly else "no" }}</span></div>
+        </div>
+    </div>
+
+    <h2>Historial de cambios de modo</h2>
+    <table class="events-table">
+        <thead><tr><th>Fecha</th><th>Modo anterior</th><th>Modo nuevo</th><th>Autor</th><th>Motivo</th></tr></thead>
+        <tbody>
+            {% for h in mode_history %}
+            <tr><td>{{ h.changed_at }}</td><td>{{ h.previous_mode }}</td><td>{{ h.mode }}</td><td>{{ h.author }}</td><td>{{ h.reason }}</td></tr>
+            {% else %}
+            <tr><td colspan="5">Sin cambios de modo registrados todavia.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <h2>Politicas (Policy Engine)</h2>
+    <table class="events-table">
+        <thead><tr><th>Categoria</th><th>Regla</th></tr></thead>
+        <tbody>
+            {% for p in policies %}
+            <tr><td>{{ p.categoria }}</td><td>{{ p.rule }}</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <h2>Approval Queue — pendientes ({{ pending_approvals|length }})</h2>
+    <table class="events-table">
+        <thead><tr><th>Mision</th><th>Categoria</th><th>Riesgo</th><th>Confianza</th><th>Tipo</th><th>Razon</th></tr></thead>
+        <tbody>
+            {% for a in pending_approvals %}
+            <tr>
+                <td>{{ a.mission_id }}</td>
+                <td>{{ a.category }}</td>
+                <td>{{ a.risk_level }}</td>
+                <td>{{ "%.2f"|format(a.confidence_score) }}</td>
+                <td>{{ a.decision_type }}</td>
+                <td>{{ a.rationale }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6">Sin aprobaciones pendientes.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <h2>Approval Queue — historial reciente</h2>
+    <table class="events-table">
+        <thead><tr><th>Mision</th><th>Categoria</th><th>Estado</th><th>Resuelto por</th><th>Notas</th></tr></thead>
+        <tbody>
+            {% for a in all_approvals %}
+            <tr><td>{{ a.mission_id }}</td><td>{{ a.category }}</td><td>{{ a.status }}</td><td>{{ a.resolved_by or "—" }}</td><td>{{ a.notes or "—" }}</td></tr>
+            {% else %}
+            <tr><td colspan="5">Sin historial de aprobaciones todavia.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <h2>Audit trail (reciente)</h2>
+    <table class="events-table">
+        <thead><tr><th>Fecha</th><th>Mision</th><th>Categoria</th><th>Riesgo</th><th>Confianza</th><th>Accion</th><th>Resultado</th></tr></thead>
+        <tbody>
+            {% for e in audit_entries %}
+            <tr>
+                <td>{{ e.recorded_at }}</td>
+                <td>{{ e.mission_id }}</td>
+                <td>{{ e.category }}</td>
+                <td>{{ e.risk_level }}</td>
+                <td>{{ "%.2f"|format(e.confidence_score) }}</td>
+                <td>{{ e.decision_action }}</td>
+                <td>{{ e.result }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="7">Sin entradas de auditoria todavia.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <h2>Rollbacks</h2>
+    <table class="events-table">
+        <thead><tr><th>Fecha</th><th>Mision</th><th>Rama</th><th>Revertido</th><th>Razon</th></tr></thead>
+        <tbody>
+            {% for r in rollbacks %}
+            <tr><td>{{ r.performed_at }}</td><td>{{ r.mission_id }}</td><td>{{ r.branch }}</td><td>{{ "si" if r.rolled_back else "no" }}</td><td>{{ r.reason }}</td></tr>
+            {% else %}
+            <tr><td colspan="5">Sin rollbacks registrados todavia.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endblock %}

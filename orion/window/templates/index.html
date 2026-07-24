@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section id="dashboard">
+    <h1>Dashboard</h1>
+    <p class="subtitle">Estado general de ORION al {{ current_date }}, {{ current_time }}.</p>
+</section>
+
+<section id="executive-summary">
+    <h2>Executive Summary</h2>
+    <div class="card-grid">
+        <div class="card">
+            <div class="card-row"><span class="label">Total Missions</span><span id="exec-total-missions">{{ coo_metrics.missions_total }}</span></div>
+            <div class="card-row"><span class="label">Ready</span><span id="exec-ready">{{ coo_metrics.missions_ready }}</span></div>
+            <div class="card-row"><span class="label">Running</span><span id="exec-running">{{ coo_metrics.missions_running }}</span></div>
+            <div class="card-row"><span class="label">Review</span><span id="exec-review">{{ coo_metrics.missions_review }}</span></div>
+            <div class="card-row"><span class="label">Done Today</span><span id="exec-done-today">{{ coo_metrics.missions_done_today }}</span></div>
+            <div class="card-row"><span class="label">Failed Today</span><span id="exec-failed-today">{{ coo_metrics.missions_failed_today }}</span></div>
+            <div class="card-row"><span class="label">Average Completion Time</span><span id="exec-avg-completion">{{ coo_metrics.average_execution_seconds }}</span></div>
+            <div class="card-row"><span class="label">Queue Size</span><span id="exec-queue-size">{{ coo_metrics.queue_size }}</span></div>
+        </div>
+    </div>
+</section>
+
+<section id="business-overview">
+    <h2>Business Overview</h2>
+    <div class="card-grid">
+        <div class="card">
+            <div class="card-row"><span class="label">Empresas activas</span><span>{{ business_overview.active_projects }}</span></div>
+            <div class="card-row"><span class="label">Repositorios activos</span><span>{{ business_overview.active_repositories }}</span></div>
+            <div class="card-row"><span class="label">Última actividad</span><span>{{ business_overview.last_activity or "—" }}</span></div>
+        </div>
+    </div>
+    <table class="events-table">
+        <thead>
+            <tr><th>Empresa</th><th>Misiones activas</th><th>Builders activos</th><th>Tiempo promedio</th><th>Última actividad</th></tr>
+        </thead>
+        <tbody>
+            {% for company in business_overview.companies %}
+            <tr onclick="window.location='/projects/{{ company.project_id }}'" style="cursor:pointer;">
+                <td>{{ company.name }}</td>
+                <td>{{ company.missions_active }}</td>
+                <td>{{ company.active_builders }}</td>
+                <td>{{ company.average_execution_seconds }}s</td>
+                <td>{{ company.last_activity or "—" }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5">No hay empresas registradas todavía.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+
+<section id="business-units">
+    <h2>Business Units</h2>
+    <div class="card-grid">
+        {% for unit in summary.business_units %}
+        <a class="card" href="/business/{{ unit.slug }}">
+            <div class="card-header">
+                <span class="card-name">{{ unit.name }}</span>
+                <span class="status-dot status-{{ unit.health }}" title="Salud: {{ unit.health }}"></span>
+            </div>
+            <div class="card-row"><span class="label">Estado</span><span>{{ unit.status }}</span></div>
+            <div class="card-row"><span class="label">Salud</span><span class="health-{{ unit.health }}">{{ unit.health }}</span></div>
+            <div class="card-row"><span class="label">Misiones activas</span><span>{{ unit.active_missions }}</span></div>
+            <div class="card-row"><span class="label">Próxima decisión</span><span>{{ unit.next_decision or "—" }}</span></div>
+        </a>
+        {% else %}
+        <p>No hay business units registradas.</p>
+        {% endfor %}
+    </div>
+</section>
+
+<section id="misiones">
+    <h2>Misiones</h2>
+    <div class="card-grid">
+        <div class="card">
+            <div class="card-row"><span class="label">Pendientes</span><span>{{ mission_summary.pendientes }}</span></div>
+            <div class="card-row"><span class="label">En ejecución</span><span>{{ mission_summary.en_ejecucion }}</span></div>
+            <div class="card-row"><span class="label">Esperando</span><span>{{ mission_summary.esperando }}</span></div>
+            <div class="card-row"><span class="label">Terminadas</span><span>{{ mission_summary.terminadas }}</span></div>
+            <div class="card-row"><span class="label">Bloqueadas</span><span>{{ mission_summary.bloqueadas }}</span></div>
+        </div>
+    </div>
+    <a class="back-link" href="/missions">Ver todas las misiones &rarr;</a>
+</section>
+
+<section id="builder">
+    <h2>Builder</h2>
+    <div class="card-grid">
+        <div class="card">
+            <div class="card-row"><span class="label">Status</span><span id="builder-status">{{ builder_state.status }}</span></div>
+            <div class="card-row"><span class="label">Current Mission</span><span id="builder-current-mission">{{ builder_state.current_mission_id or "—" }}</span></div>
+            <div class="card-row"><span class="label">Completed Today</span><span id="builder-completed-today">{{ builder_state.completed_today }}</span></div>
+            <div class="card-row"><span class="label">Failed Today</span><span id="builder-failed-today">{{ builder_state.failed_today }}</span></div>
+            <div class="card-row"><span class="label">Current Handler</span><span id="builder-current-handler">{{ builder_state.current_handler or "—" }}</span></div>
+            <div class="card-row"><span class="label">Last Activity</span><span id="builder-last-activity">{{ builder_state.last_activity or "—" }}</span></div>
+        </div>
+    </div>
+</section>
+
+<section id="coo">
+    <h2>COO</h2>
+    <div class="card-grid">
+        <div class="card">
+            <div class="card-row"><span class="label">Status</span><span id="coo-status">{{ coo_state.status }}</span></div>
+            <div class="card-row"><span class="label">Builders Available</span><span id="coo-builders-available">{{ coo_metrics.builders_available }}</span></div>
+            <div class="card-row"><span class="label">Builders Busy</span><span id="coo-builders-busy">{{ coo_metrics.builders_busy }}</span></div>
+            <div class="card-row"><span class="label">Pending Missions</span><span id="coo-pending-missions">{{ coo_metrics.queue_size }}</span></div>
+            <div class="card-row"><span class="label">Assignments Today</span><span id="coo-assignments-today">{{ coo_state.assignments_today }}</span></div>
+            <div class="card-row"><span class="label">Average Mission Time</span><span id="coo-average-mission-time">{{ coo_metrics.average_execution_seconds }}</span></div>
+            <div class="card-row"><span class="label">Last Assignment</span><span id="coo-last-assignment">{{ coo_state.last_assignment or "—" }}</span></div>
+        </div>
+    </div>
+</section>
+
+<section id="execution-pipeline">
+    <h2>Execution Pipeline</h2>
+    <div class="card-grid">
+        <div class="card">
+            <div class="card-row"><span class="label">Workspace</span><span id="pipeline-workspace">{{ execution_state.workspace or "—" }}</span></div>
+            <div class="card-row"><span class="label">Current Branch</span><span id="pipeline-branch">{{ execution_state.current_branch }}</span></div>
+            <div class="card-row"><span class="label">Current Commit</span><span id="pipeline-commit">{{ execution_state.current_commit or "—" }}</span></div>
+            <div class="card-row"><span class="label">Validation Status</span><span id="pipeline-validation">{{ execution_state.validation_status }}</span></div>
+            <div class="card-row"><span class="label">Repository Status</span><span id="pipeline-repo-status">{{ execution_state.repository_status }}</span></div>
+            <div class="card-row"><span class="label">Last Push</span><span id="pipeline-last-push">{{ execution_state.last_push or "—" }}</span></div>
+            <div class="card-row"><span class="label">Pull Request</span><span id="pipeline-pr">{{ execution_state.pull_request or "—" }}</span></div>
+        </div>
+    </div>
+</section>
+
+<section id="eventos" hx-get="/api/events" hx-trigger="every 30s" hx-swap="none">
+    <h2>Eventos recientes</h2>
+    <table class="events-table">
+        <thead>
+            <tr><th>Fecha</th><th>Tipo</th><th>Business Unit</th><th>Mensaje</th><th>Autor</th></tr>
+        </thead>
+        <tbody>
+            {% for event in summary.recent_events %}
+            <tr>
+                <td>{{ event.fecha }}</td>
+                <td>{{ event.tipo }}</td>
+                <td>{{ event.business_unit }}</td>
+                <td>{{ event.mensaje }}</td>
+                <td>{{ event.autor }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5">No hay eventos registrados todavía.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endblock %}

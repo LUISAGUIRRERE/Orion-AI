@@ -1,0 +1,133 @@
+test_members_route_still_reflects_canonical_seats (tests.test_board_canonical.APIRouteTests.test_members_route_still_reflects_canonical_seats) ... ERROR
+test_roster_route_returns_six_members (tests.test_board_canonical.APIRouteTests.test_roster_route_returns_six_members) ... ERROR
+test_board_generate_check_reports_no_drift_on_real_repo (tests.test_board_canonical.CLITests.test_board_generate_check_reports_no_drift_on_real_repo) ... ok
+test_board_validate (tests.test_board_canonical.CLITests.test_board_validate) ... ok
+test_absolute_documentation_path_rejected (tests.test_board_canonical.CanonicalLoaderTests.test_absolute_documentation_path_rejected) ... ok
+test_boolean_board_version_rejected (tests.test_board_canonical.CanonicalLoaderTests.test_boolean_board_version_rejected) ... ok
+test_boolean_schema_version_rejected (tests.test_board_canonical.CanonicalLoaderTests.test_boolean_schema_version_rejected)
+bool is a subclass of int in Python -- isinstance(True, int) ... ok
+test_documentation_file_that_exists_is_accepted (tests.test_board_canonical.CanonicalLoaderTests.test_documentation_file_that_exists_is_accepted) ... ok
+test_duplicate_display_name_raises (tests.test_board_canonical.CanonicalLoaderTests.test_duplicate_display_name_raises) ... ok
+test_duplicate_id_raises (tests.test_board_canonical.CanonicalLoaderTests.test_duplicate_id_raises) ... ok
+test_empty_role_raises (tests.test_board_canonical.CanonicalLoaderTests.test_empty_role_raises) ... ok
+test_invalid_status_raises (tests.test_board_canonical.CanonicalLoaderTests.test_invalid_status_raises) ... ok
+test_known_supersedes_reference_is_accepted (tests.test_board_canonical.CanonicalLoaderTests.test_known_supersedes_reference_is_accepted) ... ok
+test_malformed_capabilities_entry_raises (tests.test_board_canonical.CanonicalLoaderTests.test_malformed_capabilities_entry_raises) ... ok
+test_malformed_yaml_raises (tests.test_board_canonical.CanonicalLoaderTests.test_malformed_yaml_raises) ... ok
+test_member_without_id_raises (tests.test_board_canonical.CanonicalLoaderTests.test_member_without_id_raises) ... ok
+test_missing_documentation_file_raises (tests.test_board_canonical.CanonicalLoaderTests.test_missing_documentation_file_raises) ... ok
+test_missing_file_raises (tests.test_board_canonical.CanonicalLoaderTests.test_missing_file_raises) ... ok
+test_no_members_at_all_raises (tests.test_board_canonical.CanonicalLoaderTests.test_no_members_at_all_raises) ... ok
+test_non_string_display_name_rejected (tests.test_board_canonical.CanonicalLoaderTests.test_non_string_display_name_rejected) ... ok
+test_non_string_id_rejected (tests.test_board_canonical.CanonicalLoaderTests.test_non_string_id_rejected) ... ok
+test_non_string_role_rejected (tests.test_board_canonical.CanonicalLoaderTests.test_non_string_role_rejected) ... ok
+test_non_string_supersedes_rejected (tests.test_board_canonical.CanonicalLoaderTests.test_non_string_supersedes_rejected) ... ok
+test_path_traversal_in_documentation_path_rejected (tests.test_board_canonical.CanonicalLoaderTests.test_path_traversal_in_documentation_path_rejected) ... ok
+test_real_board_yaml_contains_exactly_the_six_known_seats (tests.test_board_canonical.CanonicalLoaderTests.test_real_board_yaml_contains_exactly_the_six_known_seats) ... ok
+test_real_board_yaml_loads_and_validates (tests.test_board_canonical.CanonicalLoaderTests.test_real_board_yaml_loads_and_validates) ... ok
+test_real_board_yaml_order_is_deterministic_across_loads (tests.test_board_canonical.CanonicalLoaderTests.test_real_board_yaml_order_is_deterministic_across_loads) ... ok
+test_real_board_yaml_serialization_stable (tests.test_board_canonical.CanonicalLoaderTests.test_real_board_yaml_serialization_stable) ... ok
+test_seat_label_format (tests.test_board_canonical.CanonicalLoaderTests.test_seat_label_format) ... ok
+test_self_supersede_rejected (tests.test_board_canonical.CanonicalLoaderTests.test_self_supersede_rejected) ... ok
+test_traversal_that_stays_inside_repo_root_but_looks_suspicious_is_still_checked_for_existence (tests.test_board_canonical.CanonicalLoaderTests.test_traversal_that_stays_inside_repo_root_but_looks_suspicious_is_still_checked_for_existence) ... ok
+test_unknown_member_key_rejected (tests.test_board_canonical.CanonicalLoaderTests.test_unknown_member_key_rejected) ... ok
+test_unknown_supersedes_reference_raises (tests.test_board_canonical.CanonicalLoaderTests.test_unknown_supersedes_reference_raises) ... ok
+test_unknown_top_level_key_rejected (tests.test_board_canonical.CanonicalLoaderTests.test_unknown_top_level_key_rejected) ... ok
+test_unsupported_schema_version_raises (tests.test_board_canonical.CanonicalLoaderTests.test_unsupported_schema_version_raises) ... ok
+test_check_mode_never_writes_even_when_drift_exists (tests.test_board_canonical.GeneratorTests.test_check_mode_never_writes_even_when_drift_exists) ... ok
+test_failure_preparing_first_temp_file_leaves_every_target_untouched (tests.test_board_canonical.GeneratorTests.test_failure_preparing_first_temp_file_leaves_every_target_untouched)
+G-012 REMEDIATION ROUND 2 (HIGH #3 remaining): a failure ... ok
+test_generate_fixes_real_drift (tests.test_board_canonical.GeneratorTests.test_generate_fixes_real_drift) ... ok
+test_generate_is_idempotent (tests.test_board_canonical.GeneratorTests.test_generate_is_idempotent) ... ok
+test_generated_table_escapes_pipe_and_newline_in_member_fields (tests.test_board_canonical.GeneratorTests.test_generated_table_escapes_pipe_and_newline_in_member_fields)
+G-012 REMEDIATION (HIGH #4): a display_name/role/ ... ok
+test_missing_markers_raises_generator_error (tests.test_board_canonical.GeneratorTests.test_missing_markers_raises_generator_error) ... ok
+test_missing_target_file_raises_generator_error (tests.test_board_canonical.GeneratorTests.test_missing_target_file_raises_generator_error) ... ok
+test_no_drift_against_a_fresh_copy_of_the_real_files (tests.test_board_canonical.GeneratorTests.test_no_drift_against_a_fresh_copy_of_the_real_files) ... ok
+test_second_replace_failure_rolls_back_first_target_and_raises (tests.test_board_canonical.GeneratorTests.test_second_replace_failure_rolls_back_first_target_and_raises)
+G-012 REMEDIATION ROUND 2 (HIGH #3 remaining, per Codex's ... ok
+test_write_is_atomic_no_leftover_temp_files (tests.test_board_canonical.GeneratorTests.test_write_is_atomic_no_leftover_temp_files)
+G-012 REMEDIATION (HIGH #3): writes go through a temp file ... ok
+test_every_pipeline_stage_seat_reference_resolves_in_canonical_source (tests.test_board_canonical.MemberRegistryIntegrationTests.test_every_pipeline_stage_seat_reference_resolves_in_canonical_source)
+Consistency check between the two, deliberately-separated ... ok
+test_imports_still_work (tests.test_board_canonical.MemberRegistryIntegrationTests.test_imports_still_work) ... ok
+test_list_members_coherent_failure_when_load_fails (tests.test_board_canonical.MemberRegistryIntegrationTests.test_list_members_coherent_failure_when_load_fails)
+If the single load at the start of list_members() fails, ... ok
+test_list_members_loads_canonical_config_exactly_once_per_call (tests.test_board_canonical.MemberRegistryIntegrationTests.test_list_members_loads_canonical_config_exactly_once_per_call)
+G-012 REMEDIATION ROUND 2 (HIGH #2 remaining, per Codex's ... ok
+test_list_members_never_mixes_two_canonical_revisions (tests.test_board_canonical.MemberRegistryIntegrationTests.test_list_members_never_mixes_two_canonical_revisions)
+Adversarial A/B alternating loader (per Codex's exact ... ok
+test_members_dict_holds_static_templates_not_resolved_seats (tests.test_board_canonical.MemberRegistryIntegrationTests.test_members_dict_holds_static_templates_not_resolved_seats)
+MEMBERS (the backward-compatible dict) must hold the static ... ok
+test_no_import_time_snapshot_exists (tests.test_board_canonical.MemberRegistryIntegrationTests.test_no_import_time_snapshot_exists)
+G-012 REMEDIATION (HIGH #2): there must be no module-level ... ok
+test_qa_and_experience_have_no_board_seat_regression (tests.test_board_canonical.MemberRegistryIntegrationTests.test_qa_and_experience_have_no_board_seat_regression) ... ok
+test_real_values_match_canonical_after_all_the_above (tests.test_board_canonical.MemberRegistryIntegrationTests.test_real_values_match_canonical_after_all_the_above)
+Regression: after the failure-simulation tests above swap ... ok
+test_resolution_failure_never_fabricates_an_identity (tests.test_board_canonical.MemberRegistryIntegrationTests.test_resolution_failure_never_fabricates_an_identity)
+G-012 REMEDIATION (HIGH #1): when board.yaml cannot be ... ok
+test_resolution_reflects_current_file_state_every_call_no_caching (tests.test_board_canonical.MemberRegistryIntegrationTests.test_resolution_reflects_current_file_state_every_call_no_caching)
+G-012 REMEDIATION (HIGH #2): two consecutive calls must each ... ok
+test_stage_board_seats_match_canonical_seat_labels (tests.test_board_canonical.MemberRegistryIntegrationTests.test_stage_board_seats_match_canonical_seat_labels) ... ok
+test_all_six_previous_members_still_present (tests.test_board_canonical.RegressionTests.test_all_six_previous_members_still_present) ... ok
+test_b011_worked_examples_are_unaffected_by_g012 (tests.test_board_canonical.RegressionTests.test_b011_worked_examples_are_unaffected_by_g012)
+The exact 3 pipeline examples from B-011's own brief must ... ok
+test_gemini_is_not_an_official_member (tests.test_board_canonical.RegressionTests.test_gemini_is_not_an_official_member) ... ok
+test_gemini_not_present_in_generated_tables (tests.test_board_canonical.RegressionTests.test_gemini_not_present_in_generated_tables) ... ok
+test_roles_unchanged_from_ai_roles_md (tests.test_board_canonical.RegressionTests.test_roles_unchanged_from_ai_roles_md) ... ok
+test_window_board_page_still_renders (tests.test_board_canonical.RegressionTests.test_window_board_page_still_renders) ... ERROR
+
+======================================================================
+ERROR: test_members_route_still_reflects_canonical_seats (tests.test_board_canonical.APIRouteTests.test_members_route_still_reflects_canonical_seats)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/app/tests/test_board_canonical.py", line 712, in test_members_route_still_reflects_canonical_seats
+    from orion.board import routes as board_routes
+  File "/app/orion/board/routes.py", line 26, in <module>
+    from fastapi import APIRouter, HTTPException, Query
+ModuleNotFoundError: No module named 'fastapi'
+
+======================================================================
+ERROR: test_roster_route_returns_six_members (tests.test_board_canonical.APIRouteTests.test_roster_route_returns_six_members)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/app/tests/test_board_canonical.py", line 702, in test_roster_route_returns_six_members
+    from orion.board import routes as board_routes
+  File "/app/orion/board/routes.py", line 26, in <module>
+    from fastapi import APIRouter, HTTPException, Query
+ModuleNotFoundError: No module named 'fastapi'
+
+======================================================================
+ERROR: test_window_board_page_still_renders (tests.test_board_canonical.RegressionTests.test_window_board_page_still_renders)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/app/tests/test_board_canonical.py", line 774, in test_window_board_page_still_renders
+    from orion.window.routes import board_page
+  File "/app/orion/window/routes.py", line 7, in <module>
+    from fastapi import APIRouter, HTTPException, Request
+ModuleNotFoundError: No module named 'fastapi'
+
+----------------------------------------------------------------------
+Ran 63 tests in 0.708s
+
+FAILED (errors=3)
+test_board_canonical (unittest.loader._FailedTest) ... ERROR
+
+======================================================================
+ERROR: test_board_canonical (unittest.loader._FailedTest)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_board_canonical
+Traceback (most recent call last):
+  File "/home/jules/.pyenv/versions/3.10.20/lib/python3.10/unittest/loader.py", line 154, in loadTestsFromName
+    module = __import__(module_name)
+  File "/app/tests/test_board_canonical.py", line 25, in <module>
+    from orion.board import canonical, generator
+  File "/app/orion/board/canonical.py", line 36, in <module>
+    import yaml
+ModuleNotFoundError: No module named 'yaml'
+
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+FAILED (errors=1)

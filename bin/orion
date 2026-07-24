@@ -1,0 +1,744 @@
+#!/usr/bin/env python3
+"""orion -- the ORION CLI. Real commands, no scripts to copy-paste.
+
+    orion runtime start          Start the resident Runtime (REST + SSE
+                                  API, and its Worker pool) in the
+                                  foreground. Stop with Ctrl+C, or from
+                                  another terminal with `orion runtime stop`.
+    orion runtime stop           Send a graceful shutdown signal to a
+                                  running Runtime process (reads its PID
+                                  from the persisted RuntimeState).
+    orion ask "<title>"          Create and enqueue a mission against a
+                                  running Runtime's API, then wait for a
+                                  Worker to finish it (or --no-wait to
+                                  return immediately).
+    orion analyze                 Scan a project (real repository_analyzer +
+                                  project_index) and print the resulting
+                                  summary and architecture map.
+    orion understand "<request>"  Run the full Project Intelligence brief
+                                  for a natural-language request: reusable
+                                  components, plan, and impact -- exactly
+                                  what `orion ask` computes internally
+                                  before creating any Mission.
+    orion graph                   Show the real dependency graph, or with
+                                  --impacted-by PATH, what depends on it.
+    orion impact PATH [PATH ...]  Compute a real pre-modification impact
+                                  report for one or more files.
+    orion review PATH [PATH ...]  Run the real Reviewer over one or more
+                                  files.
+    orion plan "<request>"        Decompose a request into real Missions
+                                  via the rule-based Task Planner.
+    orion company list            List every real Company the Business
+                                  Brain knows about.
+    orion company create ID NAME  Register a new Company.
+    orion project list [--company ID]
+                                   List real BusinessProjects, optionally
+                                  scoped to one Company.
+    orion roadmap [--company ID]  Show a Company's real Roadmap (idea/
+                                  backlog/in_progress/done/blocked).
+    orion goals [--company ID]    Show a Company's real Goals.
+    orion knowledge [--company ID] Show a Company's real Knowledge/Memory.
+    orion understand "<request>" [--business]
+                                   With --business, resolve Company/
+                                  Project/branding/objective/risk via the
+                                  Business Brain first (BETA 009), exactly
+                                  what `orion ask` resolves automatically
+                                  before creating any Mission.
+
+BETA 007 commands talk to the Runtime exclusively over its REST API
+(see orion/runtime/api.py). BETA 008 Intelligence commands
+(analyze/understand/graph/impact/review/plan) call
+orion.intelligence.services directly -- local, static analysis, no
+running Runtime required. BETA 009 Business Brain commands (company/
+project/roadmap/goals/knowledge, and `orion understand --business`)
+call orion.business.services directly, which itself calls into
+orion.intelligence.services once a real Company/Project is resolved
+-- never a separate, duplicate analysis. Nothing in this file talks
+to any LLM.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+import time
+import urllib.error
+import urllib.request
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT))
+
+
+def _runtime_url(port: int) -> str:
+    return f"http://127.0.0.1:{port}"
+
+
+def _get(url: str, timeout: float = 10.0) -> dict:
+    with urllib.request.urlopen(url, timeout=timeout) as response:
+        return json.loads(response.read())
+
+
+def _post(url: str, payload: dict, timeout: float = 10.0) -> dict:
+    body = json.dumps(payload).encode("utf-8")
+    request = urllib.request.Request(
+        url, data=body, headers={"Content-Type": "application/json"}, method="POST"
+    )
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        return json.loads(response.read())
+
+
+def cmd_runtime_start(args: argparse.Namespace) -> int:
+    import uvicorn
+
+    from orion.runtime.config import RuntimeConfig
+
+    config = RuntimeConfig.from_env()
+    port = args.port or config.port
+    print(
+        f"ORION Runtime iniciando en http://0.0.0.0:{port} "
+        f"(provider={config.provider}, workers={config.workers})"
+    )
+    print("Ctrl+C para detener. En otra terminal: orion runtime stop")
+    uvicorn.run("orion.runtime.api:app", host="0.0.0.0", port=port)
+    return 0
+
+
+def cmd_runtime_stop(args: argparse.Namespace) -> int:
+    import os
+    import signal
+
+    from orion.runtime import storage as runtime_storage
+
+    state = runtime_storage.load_state()
+    if not state.running or not state.pid:
+        print("El Runtime no parece estar corriendo (sin estado persistido con running=True).")
+        return 1
+    try:
+        os.kill(state.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        print(f"No hay ningun proceso vivo con PID {state.pid}. Limpiando estado persistido.")
+        state.running = False
+        runtime_storage.save_state(state)
+        return 1
+    print(f"Señal de apagado (SIGTERM) enviada al proceso {state.pid}.")
+    return 0
+
+
+def cmd_ask(args: argparse.Namespace) -> int:
+    from orion.runtime.config import RuntimeConfig
+
+    config = RuntimeConfig.from_env()
+    port = args.port or config.port
+    base_url = _runtime_url(port)
+
+    payload = {
+        "title": args.prompt,
+        "description": args.description or args.prompt,
+        "project_id": args.project or "",
+        "tags": args.tag or [],
+        "auto_plan": args.plan,
+    }
+
+    try:
+        body = _post(f"{base_url}/missions", payload)
+    except urllib.error.URLError as exc:
+        print(
+            f"No se pudo conectar al Runtime en {base_url}. "
+            f"¿Corriste 'orion runtime start' primero? Error: {exc}"
+        )
+        return 1
+
+    mission_id = body["mission_id"]
+    mission_ids = body.get("mission_ids") or [mission_id]
+    if len(mission_ids) > 1:
+        print(f"Plan '{body.get('plan_id', '')}': {len(mission_ids)} mision(es) creadas y encoladas:")
+        for mid in mission_ids:
+            print(f"  - {mid}")
+    else:
+        print(f"Mision creada: {mission_id} (status inicial: {body['status']}, cola: {body['queue_status']})")
+
+    if args.no_wait:
+        return 0
+
+    print(f"Esperando a que un Worker procese {'las' if len(mission_ids) > 1 else 'la'} mision(es)...")
+    deadline = time.monotonic() + args.timeout
+    last_status: dict[str, str] = {}
+    pending = set(mission_ids)
+    failed: set[str] = set()
+    while pending and time.monotonic() < deadline:
+        for mid in list(pending):
+            try:
+                detail = _get(f"{base_url}/missions/{mid}")
+            except urllib.error.URLError as exc:
+                print(f"Error consultando el Runtime para {mid}: {exc}")
+                return 1
+            status = detail["mission"]["status"]
+            if last_status.get(mid) != status:
+                print(f"  {mid}: {status}")
+                last_status[mid] = status
+            if status in ("REVIEW", "DONE", "FAILED"):
+                queue_item = detail.get("queue_item")
+                if queue_item and queue_item.get("error"):
+                    print(f"  {mid}: error: {queue_item['error']}")
+                if status == "FAILED":
+                    failed.add(mid)
+                pending.discard(mid)
+        if pending:
+            time.sleep(2)
+
+    if pending:
+        print(f"Tiempo de espera agotado ({args.timeout}s) sin que {len(pending)} mision(es) terminen: {sorted(pending)}")
+        return 1
+
+    if failed:
+        print(f"{len(failed)} de {len(mission_ids)} mision(es) fallaron: {sorted(failed)}")
+        return 1
+
+    return 0
+
+
+def _project_key(args: argparse.Namespace) -> str:
+    return args.project or ""
+
+
+def cmd_analyze(args: argparse.Namespace) -> int:
+    from orion.intelligence import services
+
+    index = services.analyze_project(_project_key(args), force_full=args.force_full)
+    profile = index.profile
+    print(f"Proyecto: {index.project_key}  (repo_root={index.repo_root})")
+    print(f"Archivos indexados: {index.file_count()}")
+    print("Lenguajes:", ", ".join(f"{lang}={n}" for lang, n in sorted(profile.languages.items(), key=lambda kv: -kv[1])) or "(ninguno)")
+    print("Frameworks detectados:", ", ".join(profile.frameworks) or "(ninguno)")
+    print(f"Docker: {profile.has_docker}  Compose: {profile.has_compose}  CI: {profile.has_ci}")
+    print("Entrypoints:", ", ".join(profile.entrypoints) or "(ninguno)")
+    print("Purpose breakdown:", ", ".join(f"{p}={n}" for p, n in sorted(profile.counts_by_purpose.items(), key=lambda kv: -kv[1])) or "(ninguno)")
+    print(f"TODOs encontrados: {len(profile.todo_items)}")
+
+    tree = services.get_architecture_map(_project_key(args))
+    print()
+    print("Mapa de arquitectura:")
+    _print_architecture_node(tree, indent=0)
+    return 0
+
+
+def _print_architecture_node(node, indent: int) -> None:
+    label = node.name or "(root)"
+    print("  " * indent + f"- {label} ({node.total_files()} archivos)")
+    for child in sorted(node.children.values(), key=lambda n: n.name):
+        _print_architecture_node(child, indent + 1)
+
+
+def cmd_understand(args: argparse.Namespace) -> int:
+    if getattr(args, "business", False):
+        from orion.business import services as business_services
+
+        brief = business_services.resolve_context(args.request)
+        print(brief.summary_text())
+        return 0 if brief.resolved.resolved else 1
+
+    from orion.intelligence import services
+
+    brief = services.prepare_request(args.request, project_key=_project_key(args))
+    print(brief.summary_text())
+    print()
+    print(f"Archivos indexados: {brief.index_file_count}")
+    print(f"Componentes reutilizables encontrados: {len(brief.reusable_components)}")
+    for match in brief.reusable_components[:10]:
+        print(f"  - {match.path}  similitud={match.similarity:.2f}  {match.verdict}")
+        for reason in match.reasons:
+            print(f"      · {reason}")
+    print(f"Plan ('{brief.plan.template}'): {len(brief.plan.steps)} mision(es)")
+    for step in brief.plan.steps:
+        print(f"  - {step.title}: {step.description}")
+    print(f"Impacto: {len(brief.impact.affected_files)} archivo(s) afectado(s), riesgo {brief.impact.risk}")
+    for path in brief.impact.affected_files:
+        print(f"  - {path}")
+    return 0
+
+
+def cmd_graph(args: argparse.Namespace) -> int:
+    from orion.intelligence import services
+
+    graph = services.get_dependency_graph(_project_key(args))
+    print(f"Modulos: {len(graph.module_paths)}")
+
+    if args.impacted_by:
+        target = args.impacted_by
+        module = graph.module_for_path(target) if "/" in target or target.endswith(".py") else target
+        if module is None:
+            print(f"No se encontro un modulo real para '{target}'.")
+            return 1
+        impacted = graph.impacted_by(module)
+        print(f"Modulos que dependen de '{module}' (directa o transitivamente): {len(impacted)}")
+        for name in impacted:
+            path = graph.module_paths.get(name, "")
+            print(f"  - {name}" + (f"  ({path})" if path else ""))
+        return 0
+
+    print("Modulos indexados (usa --impacted-by <path_o_modulo> para el analisis 'que se rompe si cambio esto'):")
+    for name in sorted(graph.module_paths)[:40]:
+        print(f"  - {name}  ({graph.module_paths[name]})")
+    if len(graph.module_paths) > 40:
+        print(f"  ... y {len(graph.module_paths) - 40} mas.")
+    return 0
+
+
+def cmd_impact(args: argparse.Namespace) -> int:
+    from orion.intelligence import services
+
+    report = services.compute_impact(args.paths, project_key=_project_key(args))
+    print(f"Objetivos: {', '.join(report.target_paths)}")
+    print(f"Modulos afectados: {len(report.affected_modules)}")
+    for m in report.affected_modules:
+        print(f"  - {m}")
+    print(f"Archivos afectados: {len(report.affected_files)}")
+    for f in report.affected_files:
+        print(f"  - {f}")
+    print(f"Pruebas relacionadas: {len(report.related_tests)}")
+    for t in report.related_tests:
+        print(f"  - {t}")
+    print(f"Complejidad acumulada: {report.complexity_sum}")
+    print(f"Riesgo: {report.risk}")
+    for reason in report.reasons:
+        print(f"  · {reason}")
+    return 0
+
+
+def cmd_review(args: argparse.Namespace) -> int:
+    from orion.intelligence import services
+
+    report = services.run_review(args.paths, project_key=_project_key(args))
+    print(f"Archivos revisados: {', '.join(report.paths)}")
+    print(f"Hallazgos: {len(report.findings)}  Aprobado: {report.passed()}")
+    for finding in report.findings:
+        print(f"  [{finding.severity}] {finding.path}: {finding.message}")
+    return 0 if report.passed() else 1
+
+
+def cmd_plan(args: argparse.Namespace) -> int:
+    from orion.intelligence import services
+
+    plan = services.plan_request(args.request, project_key=_project_key(args))
+    print(f"Plan ('{plan.template}'): {len(plan.steps)} mision(es), plan_id={plan.plan_id}")
+    for i, step in enumerate(plan.steps, start=1):
+        print(f"  {i}. {step.title}")
+        print(f"     {step.description}")
+        if step.tags:
+            print(f"     tags: {', '.join(step.tags)}")
+    return 0
+
+
+def cmd_company_list(args: argparse.Namespace) -> int:
+    from orion.business import services as business_services
+
+    companies = business_services.list_companies()
+    if not companies:
+        print("No hay empresas registradas todavia. Corre 'orion company create' o una migracion.")
+        return 0
+    for company in companies:
+        print(f"{company.id:12s} {company.name:20s} status={company.status:10s} objetivos={len(company.objectives)}")
+    return 0
+
+
+def cmd_company_create(args: argparse.Namespace) -> int:
+    from orion.business import services as business_services
+
+    try:
+        company = business_services.create_company(args.company_id, args.name, description=args.description or "")
+    except ValueError as exc:
+        print(str(exc))
+        return 1
+    print(f"Empresa creada: {company.id} ({company.name})")
+    return 0
+
+
+def cmd_project_list(args: argparse.Namespace) -> int:
+    from orion.business import services as business_services
+
+    projects = business_services.list_projects(args.company) if args.company else business_services.list_all_projects()
+    if not projects:
+        print("No hay proyectos de negocio registrados.")
+        return 0
+    for project in projects:
+        print(f"{project.id}  {project.company_id:12s} {project.name:20s} technical_project_id={project.technical_project_id or '-'}")
+    return 0
+
+
+def cmd_roadmap(args: argparse.Namespace) -> int:
+    from orion.business import services as business_services
+
+    companies = [args.company] if args.company else [c.id for c in business_services.list_companies()]
+    for company_id in companies:
+        items = business_services.list_roadmap(company_id)
+        if not items:
+            continue
+        print(f"=== {company_id} ===")
+        for item in items:
+            print(f"  [{item.status:12s}] {item.title}  (misiones: {len(item.mission_ids)})")
+    return 0
+
+
+def cmd_goals(args: argparse.Namespace) -> int:
+    from orion.business import services as business_services
+
+    companies = [args.company] if args.company else [c.id for c in business_services.list_companies()]
+    for company_id in companies:
+        goals = business_services.list_goals(company_id)
+        if not goals:
+            continue
+        print(f"=== {company_id} ===")
+        for goal in goals:
+            print(f"  [{goal.status:10s}] {goal.title}  progreso={goal.progress:.0f}%  misiones={len(goal.mission_ids)}")
+    return 0
+
+
+def cmd_knowledge(args: argparse.Namespace) -> int:
+    from orion.business import services as business_services
+
+    companies = [args.company] if args.company else [c.id for c in business_services.list_companies()]
+    for company_id in companies:
+        facts = business_services.list_knowledge(company_id)
+        memory = business_services.recall_memory(company_id)
+        if not facts and not memory:
+            continue
+        print(f"=== {company_id} ===")
+        for key, values in memory.items():
+            print(f"  memoria[{key}]: {', '.join(values)}")
+        for fact in facts:
+            print(f"  conocimiento[{fact.category}]: {fact.fact}")
+    return 0
+
+
+def cmd_policy(args: argparse.Namespace) -> int:
+    from orion.governance import services as governance_services
+
+    for rule in governance_services.describe_policies():
+        print(f"[{rule['categoria']:>10}] {rule['rule']}")
+    return 0
+
+
+def cmd_risk(args: argparse.Namespace) -> int:
+    from orion.governance import services as governance_services
+
+    evaluation = governance_services.evaluate_change(args.request, project_id=args.project or "")
+    print(evaluation.risk.to_dict())
+    return 0
+
+
+def cmd_confidence(args: argparse.Namespace) -> int:
+    from orion.governance import services as governance_services
+
+    evaluation = governance_services.evaluate_change(args.request, project_id=args.project or "")
+    print(evaluation.confidence.to_dict())
+    return 0
+
+
+def cmd_approve(args: argparse.Namespace) -> int:
+    from orion.governance import services as governance_services
+
+    if args.list:
+        pending = governance_services.list_pending_approvals()
+        if not pending:
+            print("No hay aprobaciones pendientes.")
+            return 0
+        for entry in pending:
+            print(f"{entry['id']}  [{entry['category']}] {entry['request']}  (riesgo={entry['risk_level']})")
+        return 0
+
+    if not args.request_id:
+        print("Se requiere --request-id (o usa --list para ver pendientes).")
+        return 1
+
+    if args.reject:
+        result = governance_services.reject_request(args.request_id, approver=args.approver, notes=args.notes or "")
+    else:
+        result = governance_services.approve_request(args.request_id, approver=args.approver, notes=args.notes or "")
+
+    if result is None:
+        print(f"No se encontro una solicitud de aprobacion con id '{args.request_id}'.")
+        return 1
+    print(f"Solicitud {result['id']} -> {result['status']} (por {result['resolved_by']})")
+    return 0
+
+
+def cmd_audit(args: argparse.Namespace) -> int:
+    from orion.governance import services as governance_services
+
+    entries = governance_services.list_audit(category=args.category, mission_id=args.mission)
+    if not entries:
+        print("Sin entradas de auditoria (con esos filtros).")
+        return 0
+    for entry in entries:
+        print(
+            f"{entry['recorded_at']}  mission={entry['mission_id']:12s} categoria={entry['category']:16s} "
+            f"riesgo={entry['risk_level']:8s} confianza={entry['confidence_score']:.2f} "
+            f"accion={entry['decision_action']:22s} resultado={entry['result']}"
+        )
+    return 0
+
+
+def cmd_mode(args: argparse.Namespace) -> int:
+    from orion.governance import services as governance_services
+
+    if args.set:
+        try:
+            profile = governance_services.set_mode(args.set, author=args.author, reason=args.reason or "")
+        except ValueError as exc:
+            print(str(exc))
+            return 1
+        print(f"Modo actualizado a {profile.mode}: {profile.description}")
+        return 0
+
+    profile = governance_services.get_mode_profile()
+    print(f"Modo actual: {profile.mode}")
+    print(profile.description)
+    return 0
+
+
+def cmd_board_members(args: argparse.Namespace) -> int:
+    from orion.board import services as board_services
+
+    for member in board_services.describe_members():
+        seat = member.board_seat or "(sin asiento AI Board dedicado -- compuerta automatica)"
+        print(f"[{member.key:10s}] {member.display_name:10s} -- {seat}")
+        print(f"             implementado por: {member.implemented_by}")
+    return 0
+
+
+def cmd_board_pipeline(args: argparse.Namespace) -> int:
+    from orion.board import services as board_services
+
+    if args.mission_id:
+        decision = board_services.get_decision(args.mission_id)
+        if decision is None:
+            print(f"No hay un pipeline decidido y persistido para la mission '{args.mission_id}'.")
+            return 1
+        print(decision.summary_text())
+        return 0
+
+    if not args.request:
+        print("Se requiere 'request' (texto libre) o --mission-id.")
+        return 1
+    from orion.board.board_engine import decide_pipeline
+
+    pipeline = decide_pipeline(args.request)
+    print(f"(dry-run, no persistido) {pipeline.summary_text()}")
+    return 0
+
+
+def cmd_board_progress(args: argparse.Namespace) -> int:
+    from orion.board import services as board_services
+
+    progress = board_services.get_progress(args.mission_id)
+    if progress is None:
+        print(f"No hay un pipeline decidido y persistido para la mission '{args.mission_id}'.")
+        return 1
+    for stage in progress:
+        seat = stage.board_seat or "(sin asiento dedicado)"
+        marker = "OK" if stage.status == "completed" else ".."
+        print(f"[{marker}] {stage.display_name:10s} ({seat}) -- {stage.status}")
+    return 0
+
+
+def cmd_board_validate(args: argparse.Namespace) -> int:
+    from orion.board.canonical import BoardConfigurationError, load_board_config
+
+    try:
+        config = load_board_config()
+    except BoardConfigurationError as exc:
+        print(f"BoardConfigurationError: {exc}")
+        return 1
+    print(f".ai/board.yaml es valido (schema_version={config.schema_version}, board_version={config.board_version}).")
+    for member in config.members:
+        print(f"  [{member.status:8s}] {member.id:15s} {member.display_name:12s} -- {member.role}")
+    return 0
+
+
+def cmd_board_generate(args: argparse.Namespace) -> int:
+    from orion.board.canonical import BoardConfigurationError
+    from orion.board.generator import generate
+
+    try:
+        results = generate(check_only=args.check)
+    except BoardConfigurationError as exc:
+        print(f"BoardConfigurationError: {exc}")
+        return 1
+
+    any_drift = False
+    for result in results:
+        if result.has_drift:
+            any_drift = True
+            if args.check:
+                print(f"DRIFT: {result.path} no coincide con lo generado desde .ai/board.yaml.")
+            else:
+                print(f"Actualizado: {result.path}")
+        else:
+            print(f"Sin cambios: {result.path}")
+
+    if args.check:
+        return 1 if any_drift else 0
+    return 0
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="orion", description="ORION CLI (BETA 007 Runtime)")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    runtime_parser = subparsers.add_parser("runtime", help="Runtime lifecycle")
+    runtime_sub = runtime_parser.add_subparsers(dest="runtime_command", required=True)
+
+    start_parser = runtime_sub.add_parser("start", help="Start the resident Runtime (foreground)")
+    start_parser.add_argument("--port", type=int, default=None)
+    start_parser.set_defaults(func=cmd_runtime_start)
+
+    stop_parser = runtime_sub.add_parser("stop", help="Stop a running Runtime process")
+    stop_parser.set_defaults(func=cmd_runtime_stop)
+
+    ask_parser = subparsers.add_parser("ask", help="Create and enqueue a mission")
+    ask_parser.add_argument("prompt", help="Mission title/instructions")
+    ask_parser.add_argument("--description", default=None)
+    ask_parser.add_argument("--project", default=None, help="Registered project_id (default: none)")
+    ask_parser.add_argument("--tag", action="append", default=None)
+    ask_parser.add_argument("--port", type=int, default=None)
+    ask_parser.add_argument("--no-wait", action="store_true")
+    ask_parser.add_argument("--timeout", type=float, default=180.0)
+    ask_parser.add_argument(
+        "--plan", action="store_true",
+        help="Decompose the request into multiple real Missions via the Task Planner before creating them",
+    )
+    ask_parser.set_defaults(func=cmd_ask)
+
+    analyze_parser = subparsers.add_parser("analyze", help="Scan a project (Project Intelligence)")
+    analyze_parser.add_argument("--project", default=None, help="Registered project_id (default: ORION-AI itself)")
+    analyze_parser.add_argument("--force-full", action="store_true", help="Ignore the incremental cache")
+    analyze_parser.set_defaults(func=cmd_analyze)
+
+    understand_parser = subparsers.add_parser("understand", help="Full Intelligence brief for a request")
+    understand_parser.add_argument("request", help="Natural-language request")
+    understand_parser.add_argument("--project", default=None)
+    understand_parser.add_argument(
+        "--business", action="store_true",
+        help="Resolve via the Business Brain (Company/Project/branding/objective/risk) instead of raw Project Intelligence",
+    )
+    understand_parser.set_defaults(func=cmd_understand)
+
+    company_parser = subparsers.add_parser("company", help="Business Brain: companies")
+    company_sub = company_parser.add_subparsers(dest="company_command", required=True)
+
+    company_list_parser = company_sub.add_parser("list", help="List every registered Company")
+    company_list_parser.set_defaults(func=cmd_company_list)
+
+    company_create_parser = company_sub.add_parser("create", help="Register a new Company")
+    company_create_parser.add_argument("company_id", help="Folder-safe id, e.g. 'atman'")
+    company_create_parser.add_argument("name", help="Display name, e.g. 'ATMAN'")
+    company_create_parser.add_argument("--description", default=None)
+    company_create_parser.set_defaults(func=cmd_company_create)
+
+    project_parser = subparsers.add_parser("project", help="Business Brain: projects")
+    project_sub = project_parser.add_subparsers(dest="project_command", required=True)
+    project_list_parser = project_sub.add_parser("list", help="List BusinessProjects")
+    project_list_parser.add_argument("--company", default=None, help="Scope to one Company id")
+    project_list_parser.set_defaults(func=cmd_project_list)
+
+    roadmap_parser = subparsers.add_parser("roadmap", help="Business Brain: roadmap")
+    roadmap_parser.add_argument("--company", default=None, help="Scope to one Company id")
+    roadmap_parser.set_defaults(func=cmd_roadmap)
+
+    goals_parser = subparsers.add_parser("goals", help="Business Brain: goals")
+    goals_parser.add_argument("--company", default=None, help="Scope to one Company id")
+    goals_parser.set_defaults(func=cmd_goals)
+
+    knowledge_parser = subparsers.add_parser("knowledge", help="Business Brain: knowledge + memory")
+    knowledge_parser.add_argument("--company", default=None, help="Scope to one Company id")
+    knowledge_parser.set_defaults(func=cmd_knowledge)
+
+    graph_parser = subparsers.add_parser("graph", help="Real dependency graph")
+    graph_parser.add_argument("--project", default=None)
+    graph_parser.add_argument("--impacted-by", default=None, help="Module or file path: what depends on this")
+    graph_parser.set_defaults(func=cmd_graph)
+
+    impact_parser = subparsers.add_parser("impact", help="Pre-modification impact report")
+    impact_parser.add_argument("paths", nargs="+", help="One or more repo-relative file paths")
+    impact_parser.add_argument("--project", default=None)
+    impact_parser.set_defaults(func=cmd_impact)
+
+    review_parser = subparsers.add_parser("review", help="Run the Reviewer over one or more files")
+    review_parser.add_argument("paths", nargs="+", help="One or more repo-relative file paths")
+    review_parser.add_argument("--project", default=None)
+    review_parser.set_defaults(func=cmd_review)
+
+    plan_parser = subparsers.add_parser("plan", help="Decompose a request into Missions (Task Planner)")
+    plan_parser.add_argument("request", help="Natural-language request")
+    plan_parser.add_argument("--project", default=None)
+    plan_parser.set_defaults(func=cmd_plan)
+
+    policy_parser = subparsers.add_parser("policy", help="Governance: show the real policy rule table")
+    policy_parser.set_defaults(func=cmd_policy)
+
+    risk_parser = subparsers.add_parser("risk", help="Governance: real risk assessment for a request")
+    risk_parser.add_argument("request", help="Natural-language request/change description")
+    risk_parser.add_argument("--project", default=None)
+    risk_parser.set_defaults(func=cmd_risk)
+
+    confidence_parser = subparsers.add_parser("confidence", help="Governance: real confidence assessment for a request")
+    confidence_parser.add_argument("request", help="Natural-language request/change description")
+    confidence_parser.add_argument("--project", default=None)
+    confidence_parser.set_defaults(func=cmd_confidence)
+
+    approve_parser = subparsers.add_parser("approve", help="Governance: manage the Approval Queue")
+    approve_parser.add_argument("--list", action="store_true", help="List pending approval requests")
+    approve_parser.add_argument("--request-id", default=None, help="Approval request id to resolve")
+    approve_parser.add_argument("--reject", action="store_true", help="Reject instead of approve")
+    approve_parser.add_argument("--approver", default="ORION", help="Who is resolving this request")
+    approve_parser.add_argument("--notes", default=None)
+    approve_parser.set_defaults(func=cmd_approve)
+
+    audit_parser = subparsers.add_parser("audit", help="Governance: real Audit trail")
+    audit_parser.add_argument("--category", default=None, help="Filter by Change Category")
+    audit_parser.add_argument("--mission", default=None, help="Filter by mission id")
+    audit_parser.set_defaults(func=cmd_audit)
+
+    mode_parser = subparsers.add_parser("mode", help="Governance: show or set the current Execution Mode")
+    mode_parser.add_argument("--set", default=None, help="One of MODE_DEVELOPMENT/MODE_HARDENING/MODE_RELEASE/MODE_PRODUCTION")
+    mode_parser.add_argument("--author", default="ORION")
+    mode_parser.add_argument("--reason", default=None)
+    mode_parser.set_defaults(func=cmd_mode)
+
+    board_parser = subparsers.add_parser("board", help="AI Board Orchestrator (B-011)")
+    board_sub = board_parser.add_subparsers(dest="board_command", required=True)
+
+    board_members_parser = board_sub.add_parser("members", help="List the six Board seats and what implements each")
+    board_members_parser.set_defaults(func=cmd_board_members)
+
+    board_pipeline_parser = board_sub.add_parser("pipeline", help="Show the decided (or a dry-run) pipeline")
+    board_pipeline_parser.add_argument("request", nargs="?", default=None, help="Natural-language request (dry-run)")
+    board_pipeline_parser.add_argument("--mission-id", default=None, help="Show the already-persisted decision for this mission")
+    board_pipeline_parser.set_defaults(func=cmd_board_pipeline)
+
+    board_progress_parser = board_sub.add_parser("progress", help="Show real per-stage progress for a mission")
+    board_progress_parser.add_argument("--mission-id", required=True)
+    board_progress_parser.set_defaults(func=cmd_board_progress)
+
+    board_validate_parser = board_sub.add_parser("validate", help="Validate .ai/board.yaml (schema + references), never writes")
+    board_validate_parser.set_defaults(func=cmd_board_validate)
+
+    board_generate_parser = board_sub.add_parser(
+        "generate", help="Regenerate AGENTS.md/.ai/BOARD.md tables from .ai/board.yaml (idempotent)"
+    )
+    board_generate_parser.add_argument("--check", action="store_true", help="Detect drift only, never write; non-zero exit if drift found")
+    board_generate_parser.set_defaults(func=cmd_board_generate)
+
+    return parser
+
+
+def main() -> int:
+    parser = build_parser()
+    args = parser.parse_args()
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

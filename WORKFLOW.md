@@ -2,15 +2,17 @@
 
 | Field | Value |
 |---|---|
-| Document type | Governance |
+| Document type | Operational workflow (new capability) |
 | Status | Active |
-| Version | 1.0.0 |
-| Owner | Board |
-| Derives authority from | `ORION.md`, `ROLES.md`, `PROTOCOL.md` |
+| Version | 1.1.0 |
+| Layered on | `.ai/DECISION_PROCESS.md`, `PROTOCOL.md`, `.orion/TEAM.md` |
+| Does not replace | `CONTRIBUTING.md`, `.ai/DECISION_PROCESS.md` |
 
-## Overview
+## Purpose
 
-Every unit of work in ORION OS passes through the same fourteen stages, in order, regardless of its size. Small work moves through the stages quickly, with lightweight documents; large or risky work moves through the same stages with more rigorous ones. No stage is optional, but the depth of each stage is proportional to risk — this proportionality is itself a decision the Product Owner and Architect make explicitly at Roadmap and Architecture time, not an excuse to skip a stage silently.
+`CONTRIBUTING.md` and `.ai/DECISION_PROCESS.md` already define how a single change moves from an approved Issue to a merge. This document places that flow inside a wider lifecycle — from a raw idea to the knowledge that outlives the change — so nothing produced along the way is lost, and every stage has a clear owner by role (resolved via `.orion/TEAM.md`).
+
+No new artifact types are introduced. Every stage below produces or consumes an artifact already defined elsewhere in this repository: a GitHub Issue, an ADR in `docs/DECISIONS.md`, a Pull Request, a Handoff Record, or an update to a living document (`README.md`, `docs/ARCHITECTURE.md`).
 
 ```mermaid
 flowchart LR
@@ -30,189 +32,117 @@ flowchart LR
     N -.feeds back.-> A
 ```
 
-Each stage below is described as: **Purpose**, **Primary role(s)**, **Inputs**, **Outputs**, **Exit criteria**.
-
 ---
 
 ## 1. Idea
 
-**Purpose.** Capture a need, problem, or opportunity before it is evaluated or committed to.
-
-**Primary role(s).** Any role may originate an idea; Product Owner receives it.
-
-**Inputs.** Any observation: a defect, a user need, a strategic opportunity, a finding from a prior Retrospective.
-
-**Outputs.** A Work Request (`PROTOCOL.md` §1), even if minimal.
-
-**Exit criteria.** The idea exists as a committed Work Request with a problem statement. It does not yet need a solution.
+**Purpose.** Capture a need, problem, or opportunity before it is evaluated.
+**Owning role.** Any role originates; Product Owner receives.
+**Artifact.** A GitHub Issue opened in draft/needs-triage state, or a note attached to an existing one.
+**Exit criteria.** The idea is written down somewhere durable — an open Issue — even before it is approved.
 
 ## 2. Research
 
-**Purpose.** Establish the facts, constraints, and options before committing resources.
-
-**Primary role(s).** Research Agent, on request from Product Owner or Architect. Skippable only when the Work Request is unambiguous and low risk — that skip decision is recorded, not silent.
-
-**Inputs.** The Work Request; specific open questions it raises.
-
-**Outputs.** A Research Report (`PROTOCOL.md` §1).
-
-**Exit criteria.** Open questions material to prioritization or design are answered or explicitly labeled unresolved with a recommended next step.
+**Purpose.** Establish facts, constraints, and options before committing resources.
+**Owning role.** Research (currently unassigned in `.orion/TEAM.md`; performed ad hoc by CTO or Architect until a dedicated implementation exists).
+**Artifact.** Findings captured as comments on the Issue, or folded into the Context section of the ADR the Issue will produce.
+**Exit criteria.** Open questions material to prioritization or design are answered, or explicitly left open with a stated reason.
 
 ## 3. Roadmap
 
-**Purpose.** Decide whether, and when, the idea gets built, relative to everything else competing for capacity.
-
-**Primary role(s).** Product Owner.
-
-**Inputs.** Work Request, Research Report (if produced).
-
-**Outputs.** An entry in `roadmap/ROADMAP.md` with priority and acceptance criteria, or an explicit rejection recorded on the Work Request.
-
-**Exit criteria.** The item has a place in the roadmap with acceptance criteria clear enough for an Architect to design against, or it is closed as rejected/deferred with a reason.
+**Purpose.** Decide whether, and when, the idea gets built relative to everything else in flight.
+**Owning role.** Product Owner.
+**Artifact.** The Issue is labeled/prioritized and approved, per `CONTRIBUTING.md` ("All implementation work begins with an approved GitHub Issue").
+**Exit criteria.** The Issue is approved by Luis, or explicitly closed as rejected/deferred with a reason.
 
 ## 4. Sprint
 
-**Purpose.** Commit a bounded set of roadmap items to a time-boxed delivery window.
-
-**Primary role(s).** Product Owner (plans and chairs), all roles (execute within it).
-
-**Inputs.** Prioritized roadmap items ready for design or implementation.
-
-**Outputs.** A Sprint Plan: scope, assigned roles, exit criteria for the sprint.
-
-**Exit criteria.** Scope is fixed and every item in it has an owning role assigned, per `ROLES.md` and `.ai/ROLES.md`.
+**Purpose.** Group a bounded set of approved Issues into a working period.
+**Owning role.** Product Owner plans; all roles execute within it.
+**Artifact.** No new artifact type — a milestone or equivalent grouping of approved Issues.
+**Exit criteria.** Scope for the period is fixed; every included Issue has an owning Builder assigned via `.orion/TEAM.md`.
 
 ## 5. Architecture
 
-**Purpose.** Decide how a roadmap item will be built before anyone builds it.
-
-**Primary role(s).** Architect (authors), Reviewer (sign-off on structural fit for cross-cutting items).
-
-**Inputs.** Roadmap item and its acceptance criteria; current `docs/ARCHITECTURE.md`.
-
-**Outputs.** A Design Document, and an ADR for anything classified cross-cutting or hard-to-reverse per `ORION.md` §5.
-
-**Exit criteria.** The Design Document is `approved` per the state machine in `PROTOCOL.md` §6, and — where required — the ADR is Board-ratified.
+**Purpose.** Decide how an approved Issue will be built before anyone builds it, when the change is cross-cutting or hard to reverse.
+**Owning role.** Architect (software structure) and/or CTO (strategic/AI design), per `.ai/ROLES.md`.
+**Artifact.** An ADR in `docs/DECISIONS.md`, following the Architecture or Governance path in `.ai/DECISION_PROCESS.md`. Purely local, reversible implementation choices skip this stage by design.
+**Exit criteria.** The ADR is Accepted (Author, Reviewed by, Approved by all present), or the Issue is judged local/reversible and proceeds straight to Implementation. Either way, when the work proceeds to Builder execution, an Approved Mission also exists in [`.orion/missions/`](.orion/missions/README.md), scoping exactly what the Builder may create or modify.
 
 ## 6. Implementation
 
-**Purpose.** Build the approved design.
-
-**Primary role(s).** Builder.
-
-**Inputs.** Approved Design Document or ADR.
-
-**Outputs.** Code and an Implementation Report describing how the result maps to the design, including any documented deviations.
-
-**Exit criteria.** The implementation is functionally complete against the acceptance criteria and ready for tests to be written or finalized.
+**Purpose.** Build the approved Issue or ADR.
+**Owning role.** Builder.
+**Artifact.** Code and tests on a branch, referencing the Issue, the Mission ([`.orion/missions/`](.orion/missions/README.md)), and, where one exists, the ADR.
+**Exit criteria.** The implementation is functionally complete against the Issue's acceptance criteria and ready for review.
 
 ## 7. Testing
 
-**Purpose.** Produce evidence that the implementation behaves as designed, proportional to its risk.
-
-**Primary role(s).** Builder (writes tests), Reviewer (assesses adequacy).
-
-**Inputs.** Implementation and its acceptance criteria.
-
-**Outputs.** A Test Report: what was tested, at what level (unit, integration, end-to-end, manual where unavoidable), and the results.
-
-**Exit criteria.** All tests pass, and their coverage is judged proportional to risk by the Reviewer — quantity of tests is not itself the criterion.
+**Purpose.** Produce evidence the implementation behaves as intended, proportional to risk.
+**Owning role.** Builder writes tests; Reviewer assesses adequacy.
+**Artifact.** Automated tests attached to the Pull Request; results visible in CI once CI exists (see `docs/ARCHITECTURE.md` status).
+**Exit criteria.** Tests pass and their coverage is judged proportional to risk by the Reviewer.
 
 ## 8. Review
 
-**Purpose.** Independently verify the work against the Definition of Done and Quality Standards before it can move toward the codebase's trunk.
-
-**Primary role(s).** Reviewer.
-
-**Inputs.** Implementation Report, Test Report, the Design Document/ADR they claim to satisfy.
-
-**Outputs.** A Review Report: approve, request changes, or reject, with findings tied to specific standards.
-
-**Exit criteria.** Review Report status is `approved`. `changes_requested` returns the unit of work to Implementation; `rejected` returns it to Architecture or Roadmap depending on the reason.
+**Purpose.** Independently verify the work against the Definition of Done and Quality Standards in `.ai/DECISION_PROCESS.md`.
+**Owning role.** Reviewer — never the Builder who authored the change.
+**Artifact.** Review comments on the Pull Request; approval or change request per `.github/PULL_REQUEST_TEMPLATE.md`.
+**Exit criteria.** Reviewer approval is recorded on the Pull Request.
 
 ## 9. Pull Request
 
-**Purpose.** Package the approved change into a single, mergeable, revertible unit.
-
-**Primary role(s).** Builder (opens it), Reviewer (attaches Review Report), GitOps (verifies mechanics).
-
-**Inputs.** Approved Implementation Report, Test Report, Review Report.
-
-**Outputs.** A Pull Request referencing all of the above documents by id.
-
-**Exit criteria.** The Pull Request builds cleanly against current `main`, has no unresolved conflicts, and carries an `approved` Review Report.
+**Purpose.** Package the reviewed change into a single mergeable, revertible unit.
+**Owning role.** Builder opens it; Reviewer signs off; GitOps verifies mechanics.
+**Artifact.** The Pull Request itself, using `.github/PULL_REQUEST_TEMPLATE.md`, referencing its Issue and any ADR.
+**Exit criteria.** The Pull Request builds cleanly against the current trunk, has no unresolved conflicts, and carries Reviewer approval.
 
 ## 10. Merge
 
-**Purpose.** Physically integrate the change into the trunk.
-
-**Primary role(s).** GitOps.
-
-**Inputs.** A Pull Request meeting the exit criteria of stage 9.
-
-**Outputs.** A merge commit, with the Pull Request and its referenced documents preserved in history.
-
-**Exit criteria.** The merge is clean, `main` builds, and the change is confirmed revertible as a single unit (`ORION.md` §3, Reversibility).
+**Purpose.** Integrate the change into the trunk.
+**Owning role.** GitOps.
+**Artifact.** A merge commit, with the Pull Request and its referenced Issue/ADR preserved in history.
+**Exit criteria.** Final approval by Luis is recorded, per every governance path in `.ai/DECISION_PROCESS.md`, and the merge is confirmed revertible as a single unit.
 
 ## 11. Release
 
-**Purpose.** Make merged changes available, on a cadence and criteria the Product Owner and Architect define.
-
-**Primary role(s).** GitOps (executes), Product Owner and Architect (set release criteria).
-
-**Inputs.** A set of merged changes meeting the release criteria.
-
-**Outputs.** A tagged release and generated release notes summarizing what shipped, traceable back to the originating Work Requests.
-
-**Exit criteria.** The release is tagged, notes are published, and the Definition of Done (`ORION.md` §6) is satisfied for every included unit of work.
+**Purpose.** Make merged changes available, on criteria Product Owner and CTO/Architect define.
+**Owning role.** GitOps executes; Product Owner and Architect set criteria.
+**Artifact.** A tagged release (once the project reaches a stage where releases are cut; currently pre-alpha per `README.md`).
+**Exit criteria.** Release criteria are met and documented.
 
 ## 12. Knowledge Capture
 
-**Purpose.** Ensure what was learned or decided during delivery is not lost once the Pull Request closes.
-
-**Primary role(s).** Documentation Agent.
-
-**Inputs.** All documents produced across stages 1–11 for the unit(s) of work released.
-
-**Outputs.** Updates to `docs/ARCHITECTURE.md` and any other living document affected; a durable link from the release to its originating decisions.
-
-**Exit criteria.** No drift exists between living documents and the released system, verified per `ROLES.md` (Documentation Agent success metrics).
+**Purpose.** Ensure what was learned or decided is not lost once the Pull Request closes.
+**Owning role.** Documentation (currently absorbed by Architect in `.orion/TEAM.md`).
+**Artifact.** Updates to `docs/ARCHITECTURE.md`, `README.md`, or any other living document affected by the change — required by the Definition of Done in `.ai/DECISION_PROCESS.md`.
+**Exit criteria.** No drift between living documents and the merged system.
 
 ## 13. Retrospective
 
-**Purpose.** Evaluate how the sprint or release went, independent of what was delivered.
-
-**Primary role(s).** Documentation Agent (facilitates and records), all roles (contribute).
-
-**Inputs.** Sprint Plan and its exit criteria; incidents, escalations, and rework observed during the sprint.
-
-**Outputs.** A Retrospective Record under `docs/retrospectives/`, including concrete process changes proposed, if any.
-
-**Exit criteria.** The Retrospective Record is committed, and any proposed process change is routed as a new Work Request (closing the loop back to stage 1) or as a governance amendment per `ORION.md` §5.
+**Purpose.** Evaluate how the work went, independent of what was delivered.
+**Owning role.** Documentation facilitates; all roles contribute.
+**Artifact.** A Retrospective Note filed as a comment on the closing Issue or Pull Request. If it produces a proposed process change, that change is filed as a new ADR in `docs/DECISIONS.md` following the Architecture or Governance path.
+**Exit criteria.** The Retrospective Note exists; any proposed process change is routed as a new Issue (idea) or ADR (governance amendment).
 
 ## 14. Memory
 
-**Purpose.** Make everything produced across the lifecycle discoverable and reusable by future work, rather than requiring it to be rediscovered.
-
-**Primary role(s).** Documentation Agent (maintains the index), all roles (consume it).
-
-**Inputs.** Every document produced in stages 1–13.
-
-**Outputs.** An indexed, cross-linked body of documents in the repository — Work Requests, Design Documents, ADRs, Review Reports, Retrospective Records — that any agent, including one new to the project, can read cold to understand both the current state and how it got there.
-
-**Exit criteria.** No decision, design, or lesson relevant to future work exists only in an agent's transient context. If it mattered, it is in the repository.
+**Purpose.** Make everything produced across the lifecycle discoverable by future work.
+**Owning role.** Documentation maintains; all roles consume.
+**Artifact.** No new artifact — the accumulated, cross-referenced body of Issues, Pull Requests, ADRs, and living documents already produced by stages 1–13.
+**Exit criteria.** No decision, design, or lesson relevant to future work exists only inside an agent's session context. If it mattered, it is in the repository.
 
 ---
 
-## Proportionality guidance
+## Proportionality
 
 | Risk level | Research | Architecture | Testing | Review depth |
 |---|---|---|---|---|
-| Low (local, reversible) | Optional, noted as skipped | Inline note, no separate DD | Unit tests | Single-pass review |
-| Medium (cross-cutting, reversible) | Targeted Research Report | Design Document | Unit + integration | Full checklist review |
-| High (hard to reverse) | Full Research Report | Design Document + ADR + Board ratification | Unit + integration + explicit rollback test | Full checklist review + Board awareness |
+| Local, reversible | Optional | Skipped (no ADR) | Unit tests | Standard review |
+| Cross-cutting, reversible | Targeted | ADR required | Unit + integration | Full checklist review |
+| Hard to reverse | Full | ADR + Luis ratification | Unit + integration + rollback check | Full checklist review, escalation-aware |
 
-This table operationalizes the decision classes defined in `ORION.md` §5. The Architect assigns the risk level at stage 5; a Reviewer or the Board may challenge that assignment through the standard escalation path in `PROTOCOL.md` §8.
+This mirrors the governance-path classification already implicit in `.ai/DECISION_PROCESS.md`'s three paths; it does not introduce a new classification scheme.
 
 ---
 
@@ -220,4 +150,5 @@ This table operationalizes the decision classes defined in `ORION.md` §5. The A
 
 | Version | Date | Change | Approved by |
 |---|---|---|---|
-| 1.0.0 | 2026-07-17 | Initial workflow definition | Board |
+| 1.0.0 | 2026-07-17 | Initial workflow, layered on existing governance paths and artifacts | Luis Aguirre |
+| 1.1.0 | 2026-07-17 | Stages 5 and 6 now require an Approved Mission before Builder execution. Part of MISSION-0001 (ADR-0005). | Luis Aguirre |

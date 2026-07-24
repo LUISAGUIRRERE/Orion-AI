@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block content %}
+<a href="/projects" class="back-link">&larr; Volver a Projects</a>
+
+<section id="project-detail">
+    <div class="card-header">
+        <h1>{{ project.name }}</h1>
+    </div>
+
+    <div class="card-row"><span class="label">Project ID</span><span>{{ project.project_id }}</span></div>
+    <div class="card-row"><span class="label">Estado</span><span>{{ project.status }}</span></div>
+    <div class="card-row"><span class="label">Descripción</span><span>{{ project.description or "—" }}</span></div>
+    <div class="card-row"><span class="label">Repositorio</span><span>{{ project.repository or "—" }}</span></div>
+    <div class="card-row"><span class="label">Branch principal</span><span>{{ project.default_branch }}</span></div>
+    <div class="card-row"><span class="label">Misiones activas</span><span>{{ summary.missions_active }} / {{ summary.missions_total }}</span></div>
+    <div class="card-row"><span class="label">Builders activos</span><span>{{ summary.active_builders }}</span></div>
+    <div class="card-row"><span class="label">Tiempo promedio de ejecución</span><span>{{ summary.average_execution_seconds }}s</span></div>
+    <div class="card-row"><span class="label">Último commit</span><span>{{ summary.last_commit or "—" }}</span></div>
+    <div class="card-row"><span class="label">Última actividad</span><span>{{ summary.last_activity or "—" }}</span></div>
+
+    <h2>Misiones del proyecto</h2>
+    <table class="events-table">
+        <thead>
+            <tr><th>ID</th><th>Título</th><th>Estado</th><th>Responsable</th><th>Prioridad</th><th>Actualizada</th></tr>
+        </thead>
+        <tbody>
+            {% for mission in missions %}
+            <tr onclick="window.location='/missions/{{ mission.id }}'" style="cursor:pointer;">
+                <td>{{ mission.id }}</td>
+                <td>{{ mission.title }}</td>
+                <td>{{ mission.status.value }}</td>
+                <td>{{ mission.owner or "—" }}</td>
+                <td>{{ mission.priority }}</td>
+                <td>{{ mission.updated_at }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6">Este proyecto todavía no tiene misiones.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endblock %}

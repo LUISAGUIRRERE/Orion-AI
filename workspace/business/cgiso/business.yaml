@@ -1,0 +1,13 @@
+name: CGISO
+status: active
+health: yellow
+objective: Estabilizar operaciones y reducir tiempos de entrega.
+missions:
+- Renegociar contrato con socio logístico
+business:
+  stage: operations
+  revenue_status: bajo presión
+events: []
+decisions:
+- Definir nuevo proveedor logístico
+opportunities: []

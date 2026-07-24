@@ -1,0 +1,10 @@
+project_id: resonance
+name: RESONANCE
+description: Unidad en fase de planeacion.
+repository: https://github.com/LUISAGUIRRERE/Orion-AI.git
+default_branch: main
+status: planning
+created_at: '2026-07-20T17:35:50+00:00'
+updated_at: '2026-07-20T17:35:50+00:00'
+metadata:
+  business_unit_slug: resonance

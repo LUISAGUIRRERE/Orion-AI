@@ -1,0 +1,117 @@
+# Single Source of Truth for the composition of ORION OS's AI Board
+# (MISSION G-012).
+#
+# This file is the canonical, machine-readable definition of *who* sits
+# on the AI Board and what each seat is responsible/not responsible
+# for. It does NOT replace the narrative documents:
+#
+#   - .ai/ROLES.md   -- full prose ("May" / "May not" / Boundaries) for
+#                       each seat. Remains hand-written and authoritative;
+#                       this file only mirrors short, structured summaries
+#                       of the same already-approved facts, never new ones.
+#   - .ai/prompts/*.md -- each AI member's actual system prompt.
+#   - docs/DECISIONS.md -- ADRs recording *why* the Board looks like this
+#                          (see ADR-0001, ADR-0006).
+#
+# Derived, generated documents (see orion/board/generator.py):
+#   - The "Membership" table in .ai/BOARD.md
+#   - The "AI Board" table in AGENTS.md
+# Both are regenerated from this file by `orion board generate` and must
+# never be hand-edited directly in their generated section.
+#
+# Adding or changing a member here is NOT, by itself, an approval to
+# change who is on the Board -- that decision must already exist in an
+# ADR (docs/DECISIONS.md) before this file is updated to reflect it.
+# See "Adding or Updating an AI Board Member" in docs/BOARD_SOURCE_OF_TRUTH.md.
+
+schema_version: 1
+board_version: 1
+
+members:
+  - id: luis-aguirre
+    display_name: Luis Aguirre
+    role: CEO and Product Owner
+    status: active
+    responsibilities:
+      - "Final authority on all product and business decisions"
+    restrictions:
+      - "May override any AI role's recommendation"
+      - "Approves GitHub Issues before implementation begins"
+      - "Approves final merges"
+    capabilities: []
+    documentation_path: null
+    supersedes: null
+
+  - id: chatgpt
+    display_name: ChatGPT
+    role: Chief AI Architect
+    status: active
+    responsibilities:
+      - "Product architecture, AI strategy, long-term vision, system design"
+    restrictions:
+      - "Proposes and designs; does not implement application code"
+      - "Does not review or approve its own designs"
+    capabilities: []
+    documentation_path: .ai/prompts/chatgpt-architect.md
+    supersedes: null
+
+  - id: claude
+    display_name: Claude
+    role: Chief Software Architect
+    status: active
+    responsibilities:
+      - "Documentation, software architecture, engineering standards, repository organization"
+    restrictions:
+      - "May draft ADRs; may not approve them"
+      - "Does not self-review its own architecture or documentation changes"
+      - "Does not merge work"
+      - "Does not override governance"
+    capabilities: []
+    documentation_path: .ai/prompts/claude-architect.md
+    supersedes: null
+
+  - id: jules
+    display_name: Jules
+    role: Lead Software Engineer
+    status: active
+    responsibilities:
+      - "Implementing approved GitHub Issues through Pull Requests"
+    restrictions:
+      - "Implements only what an approved Issue authorizes"
+      - "Does not set architecture or product direction"
+      - "Does not review or merge its own Pull Requests"
+    capabilities: []
+    documentation_path: .ai/prompts/jules-engineer.md
+    supersedes: null
+
+  - id: nemotron
+    display_name: Nemotron
+    role: Principal Engineering Reviewer
+    status: active
+    responsibilities:
+      - "Independently reviewing architecture, documentation, and implementation"
+    restrictions:
+      - "Reviews only; does not author what it reviews"
+      - "Never reviews its own work"
+      - "Has no implementation or merge authority"
+    capabilities: []
+    documentation_path: .ai/prompts/nemotron-reviewer.md
+    supersedes: null
+
+  - id: autoclaw
+    display_name: AutoClaw
+    role: Operations Engineer
+    status: active
+    responsibilities:
+      - "Automation, tooling, CI/CD, and operational workflows"
+    restrictions:
+      - "Owns operational and pipeline concerns, not product or architecture decisions"
+      - "May never approve its own operational changes"
+    capabilities: []
+    documentation_path: .ai/prompts/autoclaw-operations.md
+    supersedes: null
+
+# Deliberately NOT listed here: Gemini (agents/gemini.md). No ADR or
+# canonical document has added it as an official seat -- see ADR-0006
+# and MISSION G-012's own final report. Adding agents/<member>.md is
+# not, by itself, Board membership.

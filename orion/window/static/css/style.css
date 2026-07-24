@@ -1,0 +1,219 @@
+/* The Window — minimal, dependency-free styling. No Tailwind, no build step. */
+
+:root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --border: #262b36;
+    --text: #e6e8ec;
+    --muted: #9aa2b1;
+    --green: #2ecc71;
+    --yellow: #f1c40f;
+    --red: #e74c3c;
+}
+
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+}
+
+.topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 24px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+}
+
+.topbar-brand {
+    font-weight: 700;
+    letter-spacing: 0.1em;
+}
+
+.topbar-info span {
+    margin-left: 20px;
+    color: var(--muted);
+    font-size: 0.9em;
+}
+
+.layout {
+    display: flex;
+    min-height: calc(100vh - 49px);
+}
+
+.sidebar {
+    width: 180px;
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    padding: 20px 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.sidebar a {
+    color: var(--muted);
+    text-decoration: none;
+    padding: 10px 24px;
+}
+
+.sidebar a:hover {
+    color: var(--text);
+    background: var(--border);
+}
+
+.content {
+    flex: 1;
+    padding: 24px 32px;
+}
+
+.subtitle {
+    color: var(--muted);
+}
+
+.card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 16px;
+    margin-top: 16px;
+}
+
+.card {
+    display: block;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    text-decoration: none;
+    color: var(--text);
+    transition: border-color 0.15s ease;
+}
+
+.card:hover {
+    border-color: var(--muted);
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.card-name {
+    font-weight: 700;
+    font-size: 1.1em;
+}
+
+.card-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+    font-size: 0.9em;
+    border-top: 1px solid var(--border);
+}
+
+.label {
+    color: var(--muted);
+}
+
+.status-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.status-green { background: var(--green); }
+.status-yellow { background: var(--yellow); }
+.status-red { background: var(--red); }
+
+.health-green { color: var(--green); }
+.health-yellow { color: var(--yellow); }
+.health-red { color: var(--red); }
+
+.events-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 12px;
+}
+
+.events-table th, .events-table td {
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.9em;
+}
+
+.events-table th {
+    color: var(--muted);
+    font-weight: 600;
+}
+
+.back-link {
+    color: var(--muted);
+    text-decoration: none;
+    display: inline-block;
+    margin-bottom: 16px;
+}
+
+/* BETA 007 (Runtime): "Nueva misión" button/form on missions.html and
+   the live SSE status indicator on mission_detail.html. Additive only
+   -- reuses .card-header/.card-row/.label/.hint conventions already
+   established above rather than inventing a new visual language. */
+.btn-primary {
+    background: var(--green);
+    color: #0f1115;
+    border: none;
+    border-radius: 4px;
+    padding: 6px 14px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.btn-primary:hover {
+    opacity: 0.9;
+}
+
+.new-mission-form {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+}
+
+.new-mission-form input[type="text"] {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 4px;
+    padding: 6px 8px;
+    width: 60%;
+}
+
+.new-mission-form button {
+    margin-right: 8px;
+}
+
+.hint {
+    color: var(--muted);
+    font-size: 0.85em;
+    margin: 6px 0 0;
+}
+
+.live-indicator {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+    margin-right: 6px;
+}
+
+.live-indicator.connected {
+    background: var(--green);
+}

@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section id="missions-list">
+    <div class="card-header">
+        <h1>Misiones</h1>
+        <button type="button" id="new-mission-btn" class="btn-primary">+ Nueva misión</button>
+    </div>
+
+    <form id="new-mission-form" class="new-mission-form" hidden>
+        <div class="card-row">
+            <span class="label">Título</span>
+            <input type="text" id="new-mission-title" required placeholder="Ej: Crear hello-orion.txt">
+        </div>
+        <div class="card-row">
+            <span class="label">Descripción</span>
+            <input type="text" id="new-mission-description" placeholder="Opcional">
+        </div>
+        <div class="card-row">
+            <span class="label">Project ID</span>
+            <input type="text" id="new-mission-project" placeholder="Opcional">
+        </div>
+        <div class="card-row">
+            <button type="submit" class="btn-primary">Enviar al Runtime</button>
+            <button type="button" id="new-mission-cancel">Cancelar</button>
+        </div>
+        <p id="new-mission-status" class="hint"></p>
+    </form>
+
+    <table class="events-table">
+        <thead>
+            <tr>
+                <th>ID</th><th>Título</th><th>Estado</th><th>Business Unit</th>
+                <th>Responsable</th><th>Prioridad</th><th>Actualizada</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for mission in missions %}
+            <tr onclick="window.location='/missions/{{ mission.id }}'" style="cursor:pointer;">
+                <td>{{ mission.id }}</td>
+                <td>{{ mission.title }}</td>
+                <td>{{ mission.status.value }}</td>
+                <td>{{ mission.business_unit or "—" }}</td>
+                <td>{{ mission.owner or "—" }}</td>
+                <td>{{ mission.priority }}</td>
+                <td>{{ mission.updated_at }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="7">No hay misiones registradas todavía.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endblock %}

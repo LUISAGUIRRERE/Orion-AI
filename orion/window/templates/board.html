@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section id="board">
+    <h1>AI Board Orchestrator</h1>
+    <p class="subtitle">Que miembro del AI Board participa en cada etapa de una mission -- sin roles nuevos, reutilizando Governance/Runtime/Business Brain/Project Intelligence/Experience.</p>
+
+    <h2>Roster oficial del AI Board</h2>
+    <p class="subtitle">Fuente unica de verdad: <code>.ai/board.yaml</code> (MISSION G-012). No editar las tablas generadas en AGENTS.md / .ai/BOARD.md a mano -- usar <code>orion board generate</code>.</p>
+    <table class="events-table">
+        <thead><tr><th>Nombre</th><th>Rol</th><th>Estado</th><th>Responsabilidades</th></tr></thead>
+        <tbody>
+            {% for m in roster %}
+            <tr>
+                <td>{{ m.display_name }}</td>
+                <td>{{ m.role }}</td>
+                <td>{{ m.status }}</td>
+                <td>{{ m.responsibilities|join("; ") }}</td>
+            </tr>
+            {% endfor %}
+            {% if not roster %}
+            <tr><td colspan="4">No se pudo cargar .ai/board.yaml (ver `orion board validate`).</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+
+    <h2>Etapas de mission (pipeline)</h2>
+    <div class="card-grid">
+        {% for m in members %}
+        <div class="card">
+            <div class="card-header"><span class="card-name">{{ m.display_name }}</span></div>
+            <div class="card-row"><span class="label">Asiento AI Board</span><span>{{ m.board_seat or "(sin asiento dedicado -- compuerta automatica)" }}</span></div>
+            <div class="card-row"><span class="label">Implementado por</span><span>{{ m.implemented_by }}</span></div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <h2>Pipelines decididos por mission</h2>
+    <table class="events-table">
+        <thead><tr><th>Mission</th><th>Tipo</th><th>Categoria</th><th>Regla</th><th>Etapas / progreso</th></tr></thead>
+        <tbody>
+            {% for entry in missions_progress %}
+            <tr>
+                <td>{{ entry.decision.mission_id }}</td>
+                <td>{{ entry.decision.pipeline.kind.value }}</td>
+                <td>{{ entry.decision.pipeline.category.value if entry.decision.pipeline.category else "-" }}</td>
+                <td>{{ entry.decision.pipeline.rule }}</td>
+                <td>
+                    {% for stage in entry.progress %}
+                    <span title="{{ stage.board_seat or 'sin asiento dedicado' }}">{{ stage.display_name }} ({{ "OK" if stage.status == "completed" else "pendiente" }})</span>{% if not loop.last %} &rarr; {% endif %}
+                    {% endfor %}
+                </td>
+            </tr>
+            {% endfor %}
+            {% if not missions_progress %}
+            <tr><td colspan="5">Ninguna mission tiene aun un pipeline de Board decidido.</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+</section>
+{% endblock %}

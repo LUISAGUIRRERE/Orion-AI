@@ -1,6 +1,7 @@
 # Pull Request Checklist
 
 - [ ] Approved Issue
+- [ ] Mission ID referenced and its GitOps Checklist passed (see `.orion/missions/`)
 - [ ] Documentation updated
 - [ ] ADR required?
 - [ ] Nemotron reviewed

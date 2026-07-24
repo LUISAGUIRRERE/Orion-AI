@@ -49,6 +49,8 @@ Any change to architecture, product vision, governance rules, or any item listed
 ```
 Issue approved
   ↓
+Mission approved
+  ↓
 Jules
   ↓
 Nemotron
@@ -58,7 +60,7 @@ Luis
 Merge
 ```
 
-Any change to application code. Implementation never begins without an approved GitHub Issue.
+Any change to application code. Implementation never begins without an approved GitHub Issue, and never begins without an Approved Mission defining exactly what may be created or modified. See [`.orion/missions/README.md`](../.orion/missions/README.md) for how a Mission is authored and approved.
 
 ## Escalation
 
@@ -80,6 +82,30 @@ Every major architectural or governance decision must be recorded in `docs/DECIS
 - Consequences
 
 Documentation is treated as institutional memory: if a decision isn't recorded, it doesn't count as made.
+
+## Definition of Done
+
+A change is Done only when all of the following hold:
+
+- It traces to an approved GitHub Issue (implementation) or an accepted ADR (architecture/governance).
+- It was implemented consistently with the Issue or ADR it claims to satisfy; any deviation is documented in the Pull Request, not silent.
+- It has automated tests proportional to its risk, and they pass.
+- It was independently reviewed by the current Reviewer implementation (see `.orion/TEAM.md`), and that reviewer did not author the change.
+- It meets the Quality Standards below.
+- Documentation affected by the change (`README.md`, `AGENTS.md`, `docs/ARCHITECTURE.md`, or any other affected document) was updated in the same Pull Request.
+- It was approved and merged by Luis, following the applicable governance path above.
+
+This applies uniformly regardless of which concrete agent performed the work — see `.orion/TEAM.md` for who currently holds each function.
+
+## Quality Standards
+
+- **Correctness.** Behavior matches the approved Issue or ADR; deviations are documented, not silent.
+- **Testability.** Nothing is considered complete without a test strategy; untestable designs are flagged during architecture review rather than accepted later.
+- **Security.** No secret, credential, or token is ever committed. Inputs are treated as untrusted by default. Security-relevant changes require explicit independent review sign-off before merge.
+- **Readability.** Code and documents are written for the next agent to read cold, without access to the conversation that produced them.
+- **Consistency.** New work follows conventions already established in the repository unless a documented ADR changes them.
+- **Minimalism.** The smallest change that correctly solves the problem is preferred over the most general one — consistent with "Avoid overengineering" below.
+- **Observability.** Anything that can fail in production must be detectable without reading source code.
 
 ## Standing Principles
 

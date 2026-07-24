@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% macro render_node(node, depth) %}
+<div class="card-row" style="padding-left: {{ depth * 1.25 }}rem;">
+    <span class="label">{{ "📁" if node.children else "·" }} {{ node.name or "(root)" }}</span>
+    <span>{{ node.total_files() }} archivos</span>
+</div>
+{% for child in node.children.values()|sort(attribute="name") %}
+{{ render_node(child, depth + 1) }}
+{% endfor %}
+{% endmacro %}
+
+{% block content %}
+<section id="intelligence-architecture">
+    <h1>Project Intelligence — Arquitectura / Mapa</h1>
+    <p class="subtitle">Arbol de arquitectura vivo: construido de nuevo cada vez a partir del index actual.</p>
+
+    <form method="get" action="/intelligence/architecture" class="new-mission-form">
+        <label>Proyecto
+            <select name="project_id">
+                {% for choice in project_choices %}
+                <option value="{{ choice }}" {% if choice == project_id %}selected{% endif %}>{{ choice or "ORION-AI (self)" }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <button class="btn-primary" type="submit">Ver mapa</button>
+    </form>
+
+    <div class="card" style="max-width: 900px;">
+        <div class="card-header"><span class="card-name">{{ tree.total_files() }} archivos totales</span></div>
+        {{ render_node(tree, 0) }}
+    </div>
+
+    <p style="margin-top: 1.5rem;"><a href="/intelligence?project_id={{ project_id }}">← Proyecto</a></p>
+</section>
+{% endblock %}
