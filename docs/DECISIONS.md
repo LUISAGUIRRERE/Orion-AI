@@ -211,6 +211,43 @@ Introduce `.ai/board.yaml` as the single, machine-readable Single Source of Trut
 
 **Remediation Round 2 (2026-07-21):** Codex's second independent review (REQUEST CHANGES) found the first remediation's fixes for HIGH #2 and HIGH #3 incomplete in two specific, narrow ways, and asked for nothing beyond closing them: (1) `orion.board.member_registry.list_members()` still called `canonical.load_board_config()` once *per template* (six loads), so a single response could in principle mix labels resolved against two different on-disk revisions of `board.yaml` if it changed mid-call; (2) `orion.board.generator.generate()` wrote its two targets (`AGENTS.md`, `.ai/BOARD.md`) sequentially with no coordination, so a failure on the second `os.replace()` after the first had already succeeded left the repository with one file regenerated and the other not. Both were fixed on the same branch, with no scope change: `list_members()` now loads exactly one `BoardConfiguration` at the start of the call and resolves every template against that single instance (still zero caching across calls, still no import-time snapshot); `generate()` now backs up every target's original content and prepares every replacement temp file before swapping any target in, and if a later swap fails, restores every target already swapped in that same run back to its prior content, cleans up all temp files, and raises a `GeneratorError` naming exactly what failed. This is documented (`docs/BOARD_SOURCE_OF_TRUTH.md`, "Write safety") as per-file atomicity plus compensating rollback across the set — never as a filesystem transaction, which does not exist here.
 
+## ADR-0007: Establish Core, Runtime, and Provider Boundaries
+
+**Status:**
+Accepted
+
+**Author:**
+Jules (Lead Software Engineer)
+
+**Reviewed by:**
+Nemotron
+
+**Approved by:**
+Luis Aguirre
+
+**Date:**
+2026-07-21
+
+**Supersedes:**
+None (extends ADR-0004)
+
+**Context:**
+As ORION OS transitions from a multi-agent orchestrator into an autonomous Digital CEO, we need to clearly decouple business-domain modeling from execution infrastructure and external AI adapters. Failing to establish clear boundaries leads to circular dependencies, tight coupling, and difficult provider replacements.
+
+**Decision:**
+Establish three strict architectural boundaries with a single-direction dependency flow:
+1. **ORION Core (`orion.core`):** Represents strategic, vendor-independent business domain concepts (Organizations, Professional Roles, Departments, Capabilities, Decisions, Meetings, Opportunities, Business Memory, Knowledge, and Goals). This layer has absolutely zero dependencies on `orion.runtime` or `orion.providers`.
+2. **ORION Runtime (`orion.runtime`):** Executes approved work. Owns execution pipelines, schedulers, workers, task queues, and task runner mechanics. Represents the physical execution infrastructure.
+3. **Provider Layer (`orion.providers`):** Replaceable infrastructure adapters (such as Claude Code, Gemini CLI, etc.) that connect external AI APIs to the Executor.
+
+Guidelines:
+- **Dependency Flow:** Core -> Runtime -> Providers. Core can never import or depend on Runtime or Providers.
+- **Incremental Integration:** The Runtime itself is not migrated or refactored by MISSION 004. Integration of the new business domain with the running execution loops must be performed incrementally in subsequent sprints.
+- **Flat-Module Package Structure:** To avoid premature overengineering, nested directory fatigue, complex relative imports, and potential circular dependency cycles during pre-alpha prototyping, `orion.core` is designed with a flat-module package structure (e.g. `orion/core/organization.py`, `orion/core/department.py`, etc.). This aligns with the "Avoid overengineering" and "Consistency" principles in `ORION.md`.
+
+**Consequences:**
+The codebase gains complete structural clarity. Business rules can be written, simulated, and audited entirely in plain Python/Pydantic without launching sub-processes, starting servers, or invoking live LLM calls. Porting or adding new provider adapters remains 100% decoupled from business operations.
+
 ## ADR Template
 
 Use this template for every new ADR:

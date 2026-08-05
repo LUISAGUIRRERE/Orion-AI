@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from typing import Literal
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class BusinessDecision(BaseModel):
@@ -17,3 +17,11 @@ class BusinessDecision(BaseModel):
     estimated_roi: float = Field(0.0, description="Estimated ROI score")
     rationale: str = Field(..., description="Deep architectural or strategic reasoning")
     consequences: str = Field("", description="Expected impact and trade-offs of this decision")
+    superseded_by_id: str | None = Field(None, description="The Decision ID of the newer decision that supersedes this one")
+
+    @model_validator(mode="after")
+    def validate_superseded_state(self) -> BusinessDecision:
+        """Enforces that a superseded decision must specify the newer Decision ID that replaces it."""
+        if self.status == "superseded" and not self.superseded_by_id:
+            raise ValueError("A superseded decision must specify 'superseded_by_id' pointing to the newer decision.")
+        return self

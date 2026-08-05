@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from typing import Literal
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class BusinessGoal(BaseModel):
@@ -14,3 +14,10 @@ class BusinessGoal(BaseModel):
     status: Literal["not_started", "in_progress", "completed", "blocked"] = Field("not_started")
     progress_percentage: float = Field(0.0, description="Current progress (0.0 to 100.0)")
     parent_goal_id: str | None = Field(None, description="Optional parent goal key for hierarchy")
+
+    @model_validator(mode="after")
+    def validate_status_from_progress(self) -> BusinessGoal:
+        """Enforces that if progress_percentage >= 100.0, status is auto-resolved to 'completed'."""
+        if self.progress_percentage >= 100.0:
+            self.status = "completed"
+        return self

@@ -87,6 +87,29 @@ class TestCoreSkeleton(unittest.TestCase):
         self.assertEqual(dec.rationale, "High traffic gain")
         self.assertEqual(dec.consequences, "Increased hosting load")
 
+    def test_decision_superseded_validation(self) -> None:
+        # Should instantiate fine when not superseded or when superseded with superseded_by_id
+        dec1 = BusinessDecision(
+            id="DEC-001",
+            title="Deploy automatic blog",
+            status="superseded",
+            author_role_id="cmo",
+            rationale="High traffic gain",
+            superseded_by_id="DEC-002"
+        )
+        self.assertEqual(dec1.status, "superseded")
+        self.assertEqual(dec1.superseded_by_id, "DEC-002")
+
+        # Raising ValueError when status is superseded but no superseded_by_id is provided
+        with self.assertRaises(ValueError):
+            BusinessDecision(
+                id="DEC-001",
+                title="Deploy automatic blog",
+                status="superseded",
+                author_role_id="cmo",
+                rationale="High traffic gain"
+            )
+
     def test_meeting_instantiation(self) -> None:
         meet = Meeting(
             id="MEET-001",
@@ -162,15 +185,42 @@ class TestCoreSkeleton(unittest.TestCase):
         goal = BusinessGoal(
             id="GOAL-01",
             title="Launch MVP",
-            status="in_progress",
+            status="not_started",
             progress_percentage=45.0,
             parent_goal_id=None
         )
         self.assertEqual(goal.id, "GOAL-01")
         self.assertEqual(goal.title, "Launch MVP")
-        self.assertEqual(goal.status, "in_progress")
+        self.assertEqual(goal.status, "not_started")
         self.assertEqual(goal.progress_percentage, 45.0)
         self.assertIsNone(goal.parent_goal_id)
+
+    def test_goal_progress_auto_completed_validation(self) -> None:
+        # Progress 45.0 should keep status "not_started" or "in_progress"
+        goal1 = BusinessGoal(
+            id="GOAL-01",
+            title="Launch MVP",
+            status="in_progress",
+            progress_percentage=45.0
+        )
+        self.assertEqual(goal1.status, "in_progress")
+
+        # Progress >= 100.0 must auto-resolve status to "completed"
+        goal2 = BusinessGoal(
+            id="GOAL-01",
+            title="Launch MVP",
+            status="in_progress",
+            progress_percentage=100.0
+        )
+        self.assertEqual(goal2.status, "completed")
+
+        goal3 = BusinessGoal(
+            id="GOAL-01",
+            title="Launch MVP",
+            status="not_started",
+            progress_percentage=120.0
+        )
+        self.assertEqual(goal3.status, "completed")
 
 
 if __name__ == "__main__":
