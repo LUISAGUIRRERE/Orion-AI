@@ -111,8 +111,28 @@ class Worker:
             runtime_queue.mark_cancelled(mission_id)
             runtime_events.emit(mission_id, "worker_cancelled", "Mision cancelada durante su ejecucion.", AUTHOR)
         elif result_mission.status in (MissionStatus.REVIEW, MissionStatus.DONE):
-            runtime_queue.mark_completed(mission_id)
+            # RELEASE 0.9.0-beta FASE 2 root-cause fix: processed_count
+            # must be incremented BEFORE the queue item's on-disk status
+            # becomes COMPLETED, never after. A caller (see
+            # tests/test_runtime.py::SchedulerTests::
+            # test_concurrent_workers_each_process_a_distinct_mission_exactly_once)
+            # legitimately treats "every mission's on-disk status is
+            # COMPLETED" as the signal that it is now safe to read
+            # processed_count -- but this method runs entirely on this
+            # Worker's own thread with no lock or barrier between the
+            # two statements, so incrementing the counter *after*
+            # persisting COMPLETED left a real, provable window (a
+            # thread can be preempted for arbitrarily long between the
+            # two lines, and mark_completed() itself does real file
+            # I/O, widening it further) in which an external reader
+            # could observe the disk already showing COMPLETED while
+            # processed_count had not been incremented yet -- an
+            # undercount, not a flaky assertion. Swapping the order
+            # establishes a true happens-before within this thread's
+            # own program order: by the time any reader can observe
+            # COMPLETED on disk, processed_count is already correct.
             self.processed_count += 1
+            runtime_queue.mark_completed(mission_id)
             runtime_events.emit(mission_id, "worker_completed", "Worker completo la mision.", AUTHOR)
         elif result_mission.status == MissionStatus.WAITING:
             # BETA 010 (Governance): orion.agents.builder.agent's
@@ -129,10 +149,13 @@ class Worker:
                 AUTHOR,
             )
         else:
+            # Same root-cause fix as processed_count above, mirrored
+            # for the failure path: increment failed_count before the
+            # on-disk status becomes FAILED, not after.
+            self.failed_count += 1
             runtime_queue.mark_failed(
                 mission_id, f"Mision termino con estado {result_mission.status.value}."
             )
-            self.failed_count += 1
             runtime_events.emit(
                 mission_id, "worker_failed", f"Mision termino en estado {result_mission.status.value}.", AUTHOR
             )

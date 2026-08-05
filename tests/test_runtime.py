@@ -293,6 +293,73 @@ class WorkerTests(IsolatedRuntimeTestCase):
         self.assertEqual(item.status, QueueItemStatus.FAILED)
         self.assertIn("worker_failed", [e.type for e in bridge_services.get_events(mission_id)])
 
+    def test_processed_count_is_incremented_before_the_queue_item_becomes_completed(self) -> None:
+        """RELEASE 0.9.0-beta FASE 2 root-cause regression test: a
+        previous version of worker.py called runtime_queue.mark_completed()
+        (which persists QueueItemStatus.COMPLETED to disk) BEFORE
+        incrementing self.processed_count, leaving a real window in
+        which an external reader polling disk status as a readiness
+        signal (exactly what
+        test_concurrent_workers_each_process_a_distinct_mission_exactly_once
+        below does) could observe COMPLETED on disk while
+        processed_count had not been incremented yet -- a genuine
+        undercount, not a flaky assertion. This spies on
+        mark_completed() to prove the counter is already correct by
+        the time it runs, never after."""
+        mission_id = self._make_ready_mission()
+        runtime_worker.builder_agent.run_claimed_mission = _fake_run_claimed_mission(final_status=MissionStatus.REVIEW)
+
+        w = Worker(worker_id="worker-1")
+        observed: dict[str, int] = {}
+        original_mark_completed = runtime_queue.mark_completed
+
+        def _spy_mark_completed(mid: str):
+            observed["processed_count_at_mark_time"] = w.processed_count
+            return original_mark_completed(mid)
+
+        runtime_queue.mark_completed = _spy_mark_completed
+        try:
+            w.run_once()
+        finally:
+            runtime_queue.mark_completed = original_mark_completed
+
+        self.assertEqual(
+            observed.get("processed_count_at_mark_time"), 1,
+            "processed_count must already be 1 by the time mark_completed() persists COMPLETED to disk",
+        )
+        self.assertEqual(w.processed_count, 1)
+        item = runtime_queue.get_item(mission_id)
+        self.assertEqual(item.status, QueueItemStatus.COMPLETED)
+
+    def test_failed_count_is_incremented_before_the_queue_item_becomes_failed(self) -> None:
+        """Mirrors the regression test above for the failure path:
+        failed_count must already be incremented by the time
+        mark_failed() persists QueueItemStatus.FAILED to disk."""
+        mission_id = self._make_ready_mission()
+        runtime_worker.builder_agent.run_claimed_mission = _fake_run_claimed_mission(final_status=MissionStatus.FAILED)
+
+        w = Worker(worker_id="worker-1")
+        observed: dict[str, int] = {}
+        original_mark_failed = runtime_queue.mark_failed
+
+        def _spy_mark_failed(mid: str, error: str):
+            observed["failed_count_at_mark_time"] = w.failed_count
+            return original_mark_failed(mid, error)
+
+        runtime_queue.mark_failed = _spy_mark_failed
+        try:
+            w.run_once()
+        finally:
+            runtime_queue.mark_failed = original_mark_failed
+
+        self.assertEqual(
+            observed.get("failed_count_at_mark_time"), 1,
+            "failed_count must already be 1 by the time mark_failed() persists FAILED to disk",
+        )
+        self.assertEqual(w.failed_count, 1)
+        item = runtime_queue.get_item(mission_id)
+        self.assertEqual(item.status, QueueItemStatus.FAILED)
+
     def test_run_once_skips_mission_cancelled_before_claim(self) -> None:
         mission_id = self._make_ready_mission()
         # Pre-mark cancellation intent before any Worker ever claims it.
@@ -336,14 +403,35 @@ class WorkerTests(IsolatedRuntimeTestCase):
 
 class SchedulerTests(IsolatedRuntimeTestCase):
     def test_start_is_idempotent_and_stop_joins_threads(self) -> None:
+        # RELEASE 0.9.0-beta FASE 2 hardening: this test used to call
+        # _hard_stop(scheduler) as a plain statement after two
+        # assertions, not inside a try/finally. Unlike a Scheduler
+        # reached via runtime_services.start_runtime() (which
+        # IsolatedRuntimeTestCase.tearDown() always stops, pass or
+        # fail, since unittest always runs tearDown), this ``scheduler``
+        # is a local variable tearDown() has no way to find. If either
+        # assertion below had ever failed, its live daemon Worker
+        # thread(s) would never be joined -- they would keep polling
+        # and mutating orion.bridge/orion.runtime's shared module-level
+        # storage-path globals for the rest of this same test process,
+        # able to silently claim and complete/fail a *later*,
+        # unrelated test's mission before that test's own code ever
+        # gets to it (the exact class of cross-test contamination
+        # orion.runtime.scheduler.Scheduler.stop()'s own docstring and
+        # _hard_stop() above already exist to prevent for the
+        # already-guarded paths). try/finally guarantees the same
+        # cleanup guarantee here regardless of which assertion, if any,
+        # fails.
         scheduler = Scheduler(worker_count=2, poll_interval_seconds=0.05)
         scheduler.start()
-        first_threads = list(scheduler._threads)
-        scheduler.start()  # no-op, must not double the pool
-        self.assertEqual(scheduler._threads, first_threads)
-        self.assertTrue(scheduler.is_running())
+        try:
+            first_threads = list(scheduler._threads)
+            scheduler.start()  # no-op, must not double the pool
+            self.assertEqual(scheduler._threads, first_threads)
+            self.assertTrue(scheduler.is_running())
+        finally:
+            _hard_stop(scheduler)
 
-        _hard_stop(scheduler)
         self.assertFalse(scheduler.is_running())
         self.assertEqual(scheduler.workers, [])
 

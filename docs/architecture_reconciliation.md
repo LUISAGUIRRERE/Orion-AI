@@ -163,6 +163,6 @@ In five years, ORION OS will operate not as a tool directory, but as an autonomo
 
 To kick off the Architecture Reconciliation immediately:
 
-1. **Approve Phase 1 (Retire COO):** Issue a formal ADR (ADR-0007) proposing the complete deprecation of `orion.agents.coo` and the COO panel.
+1. **Approve Phase 1 (Retire COO):** Issue a formal ADR (ADR-0017) proposing the complete deprecation of `orion.agents.coo` and the COO panel.
 2. **Standardize the Executor Contract:** Transition the remaining core developer focus exclusively to the `PromptPackage` and `ProviderAdapter` structures. Any new capabilities (e.g., Ollama or Gemini integrations) must be built strictly as `ProviderAdapter` classes, never legacy handlers.
 3. **Initialize the SQLite migration:** Create a prototype schema for the unified database backend to prove transaction safety under concurrent worker loads.
